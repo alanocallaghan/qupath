@@ -19,14 +19,18 @@ include 'qupath-extension-script-editor'
 include 'qupath-extension-openslide'
 include 'qupath-extension-bioformats'
 
+
+includeFlat 'qupath-extension-manager'
+
 includeFlat 'qupath-extension-wsinfer'
+
 includeFlat 'qupath-extension-scripting'
-includeFlat 'qupath-script-editor'
+includeFlat 'script-editor'
 include 'script-editor'
-project(":script-editor").projectDir = new File("../qupath-script-editor/script-editor")
+project(":script-editor").projectDir = new File("../script-editor/script-editor")
 include 'script-editor-api'
-project(":script-editor-api").projectDir = new File("../qupath-script-editor/script-editor-api")
+project(":script-editor-api").projectDir = new File("../script-editor/script-editor-api")
 include 'script-editor-ace'
-project(":script-editor-ace").projectDir = new File("../qupath-script-editor/script-editor-ace")
+project(":script-editor-ace").projectDir = new File("../script-editor/script-editor-ace")
 include 'script-editor-engines'
-project(":script-editor-engines").projectDir = new File("../qupath-script-editor/script-editor-engines")
+project(":script-editor-engines").projectDir = new File("../script-editor/script-editor-engines")
