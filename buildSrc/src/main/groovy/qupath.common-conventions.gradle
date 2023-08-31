@@ -3,7 +3,7 @@ plugins {
     id 'jacoco'
     id 'io.github.qupath.platform'
     id 'org.bytedeco.gradle-javacpp-platform'
-    id 'checkstyle'
+//    id 'checkstyle'
 }
 
 repositories {
@@ -14,6 +14,12 @@ repositories {
     	name "SciJava"
 	    url "https://maven.scijava.org/content/repositories/releases"
 	}
+
+    // May be required during development
+    maven {
+        name "SciJava snapshots"
+        url "https://maven.scijava.org/content/repositories/snapshots"
+    }
 
     // Required for Bio-Formats
     maven {

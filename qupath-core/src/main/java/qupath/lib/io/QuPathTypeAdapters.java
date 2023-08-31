@@ -176,7 +176,7 @@ class QuPathTypeAdapters {
 						.stream()
 						.map(i -> (TMACoreObject)allCores.getOrDefault(i, null))
 						.filter(c -> c != null)
-						.collect(Collectors.toList());
+						.toList();
 				
 				if (sortedCores.size() == proxy.cores.size()) {
 					var tmaGrid = DefaultTMAGrid.create(sortedCores, proxy.width);
@@ -200,7 +200,7 @@ class QuPathTypeAdapters {
 		
 		TMAGridProxy(TMAGrid grid) {
 			this.width = grid.getGridWidth();
-			cores = grid.getTMACoreList().stream().map(c -> c.getID()).collect(Collectors.toList());
+			cores = grid.getTMACoreList().stream().map(c -> c.getID()).toList();
 		}
 		
 	}
@@ -375,11 +375,6 @@ class QuPathTypeAdapters {
 			if (color != null) {
 				out.name("color");
 				out.jsonValue(String.format("[%d, %d, %d]", ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color)));
-//				out.beginArray();
-//				out.value(ColorTools.red(color));
-//				out.value(ColorTools.green(color));
-//				out.value(ColorTools.blue(color));
-//				out.endArray();
 			}
 			
 			// Write classification
@@ -446,14 +441,20 @@ class QuPathTypeAdapters {
 				out.beginArray();
 				for (var child : value.getChildObjectsAsArray()) {
 					write(out, child);
-//					gson.toJson(child, PathObject.class, out);
 				}
 				out.endArray();
 			}
 			
-			out.endObject();
+			// Write metadata (new in v0.5.0)
+			var metadata = value.getMetadata();
+			if (!metadata.isEmpty()) {
+				out.name("metadata");
+				gson.toJson(metadata, Map.class, out);
+			}
+			
+			out.endObject(); // Properties
 	
-			out.endObject();
+			out.endObject(); // PathObject/Feature
 		}
 	
 		@Override
@@ -616,10 +617,16 @@ class QuPathTypeAdapters {
 			if (isLocked && !pathObject.isRootObject())
 				pathObject.setLocked(isLocked);
 			
-			if (metadata != null && pathObject instanceof MetadataStore) {
-				for (Entry<String, JsonElement> entry : metadata.entrySet())
-					if (entry.getValue().isJsonPrimitive())
-						((MetadataStore)pathObject).putMetadataValue(entry.getKey(), entry.getValue().getAsString());
+			if (metadata != null && !metadata.isEmpty()) {
+				try {
+					for (Entry<String, JsonElement> entry : metadata.entrySet()) {
+						var value = entry.getValue();
+						if (value.isJsonPrimitive())
+							pathObject.getMetadata().put(entry.getKey(), value.getAsString());
+					}
+				} catch (UnsupportedOperationException e) {
+					logger.warn("Exception setting metadata values: " + e.getLocalizedMessage(), e);
+				}
 			}
 			
 			if (childObjects != null)
@@ -632,6 +639,8 @@ class QuPathTypeAdapters {
 	
 	
 	static class MeasurementListTypeAdapter extends TypeAdapter<MeasurementList> {
+
+		private static final Logger logger = LoggerFactory.getLogger(MeasurementListTypeAdapter.class);
 		
 		static MeasurementListTypeAdapter INSTANCE = new MeasurementListTypeAdapter();
 
@@ -641,8 +650,16 @@ class QuPathTypeAdapters {
 			if (value != null) {
 				for (var entry : value.asMap().entrySet()) {
 					out.name(entry.getKey());
-					out.value(entry.getValue());
-				}				
+					Double measurementValue = entry.getValue();
+					if (measurementValue == null || Double.isNaN(measurementValue))
+						out.value("NaN");
+					else if (Double.POSITIVE_INFINITY == measurementValue)
+						out.value("Infinity");
+					else if (Double.NEGATIVE_INFINITY == measurementValue)
+						out.value("-Infinity");
+					else
+						out.value(measurementValue);
+				}
 			}
 			out.endObject();
 			
@@ -674,9 +691,28 @@ class QuPathTypeAdapters {
 				list.close();
 				return list;
 			} else if (token == JsonToken.BEGIN_OBJECT) {
-				Map<String, Double> map = gson.fromJson(in, Map.class);
+				Map<String, ?> map = gson.fromJson(in, Map.class);
 				MeasurementList list = MeasurementListFactory.createMeasurementList(map.size(), MeasurementListType.DOUBLE);
-				list.putAll(map);
+				for (var entry : map.entrySet()) {
+					String key = entry.getKey();
+					var value = entry.getValue();
+					if (value instanceof Number number) {
+						list.put(key, number.doubleValue());
+					} else if (value instanceof String string) {
+						// Try to handle useful strings that aren't valid JSON numbers
+						String lower = string.toLowerCase();
+						if (lower.equals("nan"))
+							list.put(key, Double.NaN);
+						else if (lower.equals("inf"))
+							list.put(key, Double.POSITIVE_INFINITY);
+						else if (lower.equals("-inf"))
+							list.put(key, Double.NEGATIVE_INFINITY);
+						else
+							list.put(key, Double.parseDouble(string));
+					} else {
+						logger.warn("Cannot parse measurement value for key {}: {}", key, value);
+					}
+				}
 				list.close();
 				return list;
 			} else {

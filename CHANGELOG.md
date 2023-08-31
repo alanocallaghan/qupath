@@ -1,3 +1,34 @@
+## Version 0.5.0-SNAPSHOT
+
+This is a work-in-progress for the next QuPath release.
+
+### Bugs fixed
+* Rendered image export does not support opacity (https://github.com/qupath/qupath/issues/1292)
+* Cannot import GeoJSON with NaN measurements (https://github.com/qupath/qupath/issues/1293)
+* `isOverlayNG` should be turned on by default (https://github.com/qupath/qupath/issues/1244)
+* Labeled image instance export doesn't work as expected for z-stacks (https://github.com/qupath/qupath/issues/1267)
+* Fix PathClass singleton creation when a derived PathClass is requested (https://github.com/qupath/qupath/pull/1286)
+* 'Run for project' does not recognize when previous images have been deleted (https://github.com/qupath/qupath/issues/1291)
+* ProjectCommands.promptToImportImages always returns an empty list (https://github.com/qupath/qupath/issues/1251)
+* PathIO doesn't restore backup if writing ImageData fails (https://github.com/qupath/qupath/issues/1252)
+* Scripts open with the caret at the bottom of the text rather than the top (https://github.com/qupath/qupath/issues/1258)
+* 'Synchronize viewers' ignores z and t positions (https://github.com/qupath/qupath/issues/1220)
+
+### Dependency updates
+* Bio-Formats 7.0.0
+* DeepJavaLibrary 0.23.0
+* Groovy 4.0.14
+* ImageJ 1.54f
+* JavaCPP 1.5.9
+* JavaFX 20.0.2
+* Logback 1.3.11
+* OpenCV 4.7.0
+* Picocli 4.7.4
+* RichTextFX 0.11.1
+* SLF4J 2.0.7
+
+
+
 ## Version 0.4.3
 
 This is a *minor release* that aims to be fully compatible with previous v0.4.x releases, while fixing bugs.
@@ -20,6 +51,17 @@ This is a *minor release* that aims to be fully compatible with previous v0.4.x 
 * Bio-Formats 6.12.0
 * Groovy 4.0.9
 * JFreeSVG 5.0.5
+
+
+### Dependency updates
+* Bio-Formats 6.12.0
+* Groovy 4.0.9
+* ImageJ 1.54b
+* JavaFX 19.0.2
+* JFreeSVG 5.0.4
+* JFXtras 17-r1
+* Picocli 4.7.1
+* SLF4J 2.0.6
 
 
 ## Version 0.4.2
