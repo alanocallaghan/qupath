@@ -279,25 +279,47 @@ public final class GeneralTools {
 	
 	/**
 	 * Get the file name with extension removed.
+	 * Note that this generally means removing the text including and after the final dot,
+	 * but also handles specific multi-part file extensions as well.
 	 * @param file
 	 * @return
-	 * {@link #getExtension(File)}
+	 * @see #stripExtension(String)
+	 * @see #getExtension(File)
 	 */
 	public static String getNameWithoutExtension(File file) {
 		var ext = getExtension(file).orElse(null);
 		String name = file.getName();
 		return ext ==  null ? name : name.substring(0, name.length() - ext.length());
 	}
-	
+
 	/**
-	 * Get the file name with extension removed.
+	 * Strip the extension from a file name or path, leaving the rest of the string unchanged.
 	 * @param name
 	 * @return
 	 * {@link #getExtension(File)}
+	 * @deprecated v0.5.0 in favor of {@link #stripExtension(String)}, which does the same thing but has
+	 *             a more descriptive name. See https://github.com/qupath/qupath/pull/1275 for details.
 	 */
+	@Deprecated
 	public static String getNameWithoutExtension(String name) {
-		var ext = getExtension(name).orElse(null);
-		return ext ==  null ? name : name.substring(0, name.length() - ext.length());
+		LogTools.warnOnce(logger, "getNameWithoutExtension(String) has been deprecated - use stripExtension(name) instead.");
+		return stripExtension(name);
+	}
+	
+	/**
+	 * Strip the extension from a file name or path, leaving the rest of the string unchanged.
+	 * Note that this generally means removing the text including and after the final dot,
+	 * but also handles specific multi-part file extensions as well.
+	 *
+	 * @param path
+	 * @return
+	 * @see #getNameWithoutExtension(File)
+	 * @see #getExtension(String)
+	 * @see #getExtension(File)
+	 */
+	public static String stripExtension(String path) {
+		var ext = getExtension(path).orElse(null);
+		return ext ==  null ? path : path.substring(0, path.length() - ext.length());
 	}
 	
 	/**
@@ -617,17 +639,17 @@ public final class GeneralTools {
 	/**
 	 * Small Greek mu (useful for micrometers)
 	 */
-	public static final char SYMBOL_MU = '\u00B5';
+	public static final char SYMBOL_MU = 'µ';
 
 	/**
 	 * Small Greek sigma (useful for Gaussian filter sizes, standard deviations)
 	 */
-	public static final char SYMBOL_SIGMA = '\u03C3';
+	public static final char SYMBOL_SIGMA = 'σ';
 
 	/**
 	 * String to represent um (but with the proper 'mu' symbol)
 	 */
-	public static final String SYMBOL_MICROMETER = '\u00B5' + "m";
+	public static final String SYMBOL_MICROMETER = "µm";
 	
 	
 	/**
@@ -899,7 +921,7 @@ public final class GeneralTools {
 	public static <T> void smartStringSort(Collection<T> collection, Function<T, String> extractor) {
 //		for (var temp : collection)
 //			System.err.println(new StringPartsSorter<T>(temp, temp.toString()));
-		var list = collection.stream().map(c -> new StringPartsSorter<>(c, extractor.apply(c))).sorted().map(s -> s.obj).collect(Collectors.toList());
+		var list = collection.stream().map(c -> new StringPartsSorter<>(c, extractor.apply(c))).sorted().map(s -> s.obj).toList();
 		collection.clear();
 		collection.addAll(list);
 	}

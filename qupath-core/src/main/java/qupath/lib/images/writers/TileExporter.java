@@ -126,7 +126,7 @@ public class TileExporter  {
 	public TileExporter parentObjects(Predicate<PathObject> filter) {
 		this.parentObjects = imageData.getHierarchy().getFlattenedObjectList(null).stream()
 				.filter(filter)
-				.collect(Collectors.toList());
+				.toList();
 		return this;
 	}
 	
@@ -590,7 +590,7 @@ public class TileExporter  {
 		var pool = Executors.newFixedThreadPool(ThreadTools.getParallelism(), ThreadTools.createThreadFactory("tile-exporter", true));
 
 		String imageName = GeneralTools.stripInvalidFilenameChars(
-				GeneralTools.getNameWithoutExtension(server.getMetadata().getName())
+				GeneralTools.stripExtension(server.getMetadata().getName())
 				);
 
 		// Create something we can input as the image path for export

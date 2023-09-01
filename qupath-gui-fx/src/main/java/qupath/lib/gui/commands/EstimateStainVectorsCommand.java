@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Locale.Category;
 
+import javafx.scene.control.*;
 import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
 import org.apache.commons.math3.stat.correlation.SpearmansCorrelation;
 import org.slf4j.Logger;
@@ -46,11 +47,6 @@ import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
-import javafx.scene.control.TitledPane;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
@@ -62,10 +58,10 @@ import qupath.lib.color.ColorToolsAwt;
 import qupath.lib.color.StainVector;
 import qupath.lib.common.ColorTools;
 import qupath.lib.common.GeneralTools;
-import qupath.lib.gui.dialogs.Dialogs;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.dialogs.ParameterPanelFX;
-import qupath.lib.gui.dialogs.Dialogs.DialogButton;
 import qupath.lib.gui.tools.ColorToolsFX;
+import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.plugins.parameters.ParameterList;
@@ -105,10 +101,10 @@ class EstimateStainVectorsCommand {
 
 	public static void promptToEstimateStainVectors(ImageData<BufferedImage> imageData) {
 		if (imageData == null) {
-			Dialogs.showNoImageError(TITLE);
+			GuiTools.showNoImageError(TITLE);
 			return;
 		}
-		if (imageData == null || !imageData.isBrightfield() || imageData.getServer() == null || !imageData.getServer().isRGB()) {
+		if (!imageData.isBrightfield() || imageData.getServer() == null || !imageData.getServer().isRGB()) {
 			Dialogs.showErrorMessage(TITLE, "No brightfield, RGB image selected!");
 			return;
 		}
@@ -146,12 +142,12 @@ class EstimateStainVectorsCommand {
 		
 		// Check if the background values may need to be changed
 		if (rMax != stains.getMaxRed() || gMax != stains.getMaxGreen() || bMax != stains.getMaxBlue()) {
-			DialogButton response =
+			ButtonType response =
 					Dialogs.showYesNoCancelDialog(TITLE,
 							String.format("Modal RGB values %d, %d, %d do not match current background values - do you want to use the modal values?", rMax, gMax, bMax));
-			if (response == DialogButton.CANCEL)
+			if (response == ButtonType.CANCEL)
 				return;
-			else if (response == DialogButton.YES) {
+			else if (response == ButtonType.YES) {
 				stains = stains.changeMaxValues(rMax, gMax, bMax);
 				imageData.setColorDeconvolutionStains(stains);
 			}
@@ -159,7 +155,7 @@ class EstimateStainVectorsCommand {
 		
 		
 		ColorDeconvolutionStains stainsUpdated = null;
-		logger.info("Requesting region for stain vector editing: ", request);
+		logger.info("Requesting region for stain vector editing: {}", request);
 		try {
 			stainsUpdated = showStainEditor(img, stains);
 		} catch (Exception e) {
@@ -254,28 +250,6 @@ class EstimateStainVectorsCommand {
 		table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
 		table.setPrefHeight(120);
 		
-		
-//		// Fix first & preferred column sizes
-//		int widthName = 0, widthStain = 0;
-//		for (int row = 0; row < table.getRowCount(); row++) {
-//			TableCellRenderer renderer = table.getCellRenderer(row, 0);
-//			Component comp = table.prepareRenderer(renderer, row, 0);
-//			widthName = Math.max(comp.getPreferredSize().width, widthName);
-//			
-//			renderer = table.getCellRenderer(row, 1);
-//			comp = table.prepareRenderer(renderer, row, 1);
-//			widthStain = Math.max(comp.getPreferredSize().width, widthStain);
-//			renderer = table.getCellRenderer(row, 2);
-//			comp = table.prepareRenderer(renderer, row, 2);
-//			widthStain = Math.max(comp.getPreferredSize().width, widthStain);
-//		}
-//		table.getColumnModel().getColumn(0).setMaxWidth(widthName + 10);
-//		table.getColumnModel().getColumn(0).setPreferredWidth(widthName + 10);
-//		table.getColumnModel().getColumn(1).setPreferredWidth(widthStain + 20);
-//		table.getColumnModel().getColumn(2).setPreferredWidth(widthStain + 20);
-		
-		
-		
 		// Create auto detection parameters
 		ParameterList params = new ParameterList()
 				.addDoubleParameter("minStainOD", "Min channel OD", 0.05, "", "Minimum staining OD - pixels with a lower OD in any channel (RGB) are ignored (default = 0.05)")
@@ -306,32 +280,26 @@ class EstimateStainVectorsCommand {
 //		panelAuto.setBorder(BorderFactory.createTitledBorder("Auto detect"));
 		panelAuto.setCenter(panelParams.getPane());
 		panelAuto.setBottom(btnAuto);
-		
-//		JScrollPane scrollPane = new JScrollPane(table);
-//		JPanel panelTable = new JPanel(new BorderLayout());
-//		panelTable.add(scrollPane, BorderLayout.CENTER);
-////		JTextArea textInstructions = new JTextArea();
-////		textInstructions.setWrapStyleWord(true);
-////		textInstructions.setLineWrap(true);
-////		textInstructions.setText(
-////				"Viewer for manually and automatically adjusting stain vectors used for stain separation.\n\n" +
-////				"Each stain vector is 3 values describing the red, green and blue components that define the colour of each " +
-////				"stain (e.g. hematoxylin, DAB, eosin).  The scatterplots show how these relate to pixel colours for each " +
-////				"combination of red, green and blue.\n\n" +
-////				"'Good' stain vectors should point along the edges of the scattered points, ignoring any artefacts resulting from " + 
-////				"pixels that don't belong to normal staining patterns."
-////				);
-////		panelTable.add(new JScrollPane(textInstructions), BorderLayout.SOUTH);
-//		panelTable.setBorder(BorderFactory.createTitledBorder("Stain vectors"));
-		
-		panelSouth.setCenter(new TitledPane("Stain vectors", table));
-		panelSouth.setBottom(new TitledPane("Auto detect", panelAuto));
+
+		var titledStainVectors = new TitledPane("Stain vectors", table);
+		titledStainVectors.setCollapsible(false);
+		panelSouth.setCenter(titledStainVectors);
+
+		var titledAutoDetect = new TitledPane("Auto detect", panelAuto);
+		titledAutoDetect.setCollapsible(false);
+		panelSouth.setBottom(titledAutoDetect);
 		
 		BorderPane panelMain = new BorderPane();
 		panelMain.setCenter(panelPlots);
 		panelMain.setBottom(panelSouth);
 		
-		if (Dialogs.showConfirmDialog("Visual Stain Editor", panelMain)) {
+		if (Dialogs.builder()
+				.title("Visual Stain Editor")
+				.content(panelMain)
+				.buttons(ButtonType.OK, ButtonType.CANCEL)
+				.showAndWait()
+				.orElse(ButtonType.CANCEL)
+				.equals(ButtonType.OK)) {
 			return stainsWrapper.getStains();
 		} else {
 			stainsWrapper.resetStains();

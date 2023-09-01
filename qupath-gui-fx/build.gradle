@@ -2,7 +2,9 @@ plugins {
   id 'qupath.common-conventions'
   id 'qupath.publishing-conventions'
   id 'java-library'
-  
+
+//  id "io.freefair.lombok" version "8.0.1"
+
   alias(libs.plugins.javafx)
 }
 
@@ -18,8 +20,9 @@ dependencies {
   api project(':qupath-core')
   api project(':qupath-core-processing')
 
+  implementation libs.qupath.fxtras // API for no
   api libs.controlsfx
-  
+
   implementation libs.snakeyaml
   
   implementation libs.jfxtras
@@ -29,6 +32,8 @@ dependencies {
   implementation libs.bundles.ikonli
   
   implementation libs.bundles.markdown
+
+  implementation libs.bundles.logviewer
 }
 
 javafx {

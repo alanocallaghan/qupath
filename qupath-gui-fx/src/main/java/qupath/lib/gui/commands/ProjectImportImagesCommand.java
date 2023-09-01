@@ -69,17 +69,19 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
+import qupath.fx.utils.FXUtils;
+import qupath.fx.dialogs.FileChoosers;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.common.ThreadTools;
 import qupath.lib.display.ChannelDisplayInfo;
 import qupath.lib.display.ImageDisplay;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.dialogs.Dialogs;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.panes.ProjectBrowser;
 import qupath.lib.gui.panes.ServerSelector;
 import qupath.lib.gui.prefs.PathPrefs;
+import qupath.fx.utils.GridPaneUtils;
 import qupath.lib.gui.tools.GuiTools;
-import qupath.lib.gui.tools.PaneTools;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.ImageData.ImageType;
 import qupath.lib.images.servers.WrappedBufferedImageServer;
@@ -114,17 +116,17 @@ class ProjectImportImagesCommand {
 	
 	/**
 	 * Prompt to import images to the current project.
-	 * 
-	 * 
+	 *
 	 * @param qupath QuPath instance, used to access the current project and stage
 	 * @param builder if not null, this will be used to create the servers. If null, a combobox will be shown to choose an installed builder.
 	 * @param defaultPaths URIs to use to prepopulate the list
 	 * @return
 	 */
 	static List<ProjectImageEntry<BufferedImage>> promptToImportImages(QuPathGUI qupath, ImageServerBuilder<BufferedImage> builder, String... defaultPaths) {
+		// TODO: I can only apologise for this code... it is dreadful
 		var project = qupath.getProject();
 		if (project == null) {
-			Dialogs.showNoProjectError(commandName);
+			GuiTools.showNoProjectError(commandName);
 			return Collections.emptyList();
 		}
 		
@@ -208,9 +210,9 @@ class ProjectImportImagesCommand {
 		CheckBox cbImageSelector = new CheckBox("Show image selector");
 		cbImageSelector.setSelected(showImageSelectorProperty.get());
 
-		PaneTools.setMaxWidth(Double.MAX_VALUE, comboBuilder, comboType, comboRotate, cbPyramidalize, cbImportObjects, tfArgs, cbImageSelector);
-		PaneTools.setFillWidth(Boolean.TRUE, comboBuilder, comboType, comboRotate, cbPyramidalize, cbImportObjects, tfArgs, cbImageSelector);
-		PaneTools.setHGrowPriority(Priority.ALWAYS, comboBuilder, comboType, comboRotate, cbPyramidalize, cbImportObjects, tfArgs, cbImageSelector);
+		GridPaneUtils.setMaxWidth(Double.MAX_VALUE, comboBuilder, comboType, comboRotate, cbPyramidalize, cbImportObjects, tfArgs, cbImageSelector);
+		GridPaneUtils.setFillWidth(Boolean.TRUE, comboBuilder, comboType, comboRotate, cbPyramidalize, cbImportObjects, tfArgs, cbImageSelector);
+		GridPaneUtils.setHGrowPriority(Priority.ALWAYS, comboBuilder, comboType, comboRotate, cbPyramidalize, cbImportObjects, tfArgs, cbImageSelector);
 		
 		GridPane paneType = new GridPane();
 		paneType.setPadding(new Insets(5));
@@ -218,13 +220,13 @@ class ProjectImportImagesCommand {
 		paneType.setVgap(5);
 		int row = 0;
 		if (requestBuilder)
-			PaneTools.addGridRow(paneType, row++, 0, "Specify the library used to open images", labelBuilder, comboBuilder);
-		PaneTools.addGridRow(paneType, row++, 0, "Specify the default image type for all images being imported (required for analysis, can be changed later under the 'Image' tab)", labelType, comboType);
-		PaneTools.addGridRow(paneType, row++, 0, "Optionally rotate images on import", labelRotate, comboRotate);
-		PaneTools.addGridRow(paneType, row++, 0, "Optionally pass reader-specific arguments to the image provider.\nUsually this should just be left empty.", labelArgs, tfArgs);
-		PaneTools.addGridRow(paneType, row++, 0, "Dynamically create image pyramids for large, single-resolution images", cbPyramidalize, cbPyramidalize);
-		PaneTools.addGridRow(paneType, row++, 0, "Read and import objects (e.g. annotations) from the image file, if possible", cbImportObjects, cbImportObjects);
-		PaneTools.addGridRow(paneType, row++, 0, "Show the 'Image selector' window whenever the same URI contains multiple images.\n"
+			GridPaneUtils.addGridRow(paneType, row++, 0, "Specify the library used to open images", labelBuilder, comboBuilder);
+		GridPaneUtils.addGridRow(paneType, row++, 0, "Specify the default image type for all images being imported (required for analysis, can be changed later under the 'Image' tab)", labelType, comboType);
+		GridPaneUtils.addGridRow(paneType, row++, 0, "Optionally rotate images on import", labelRotate, comboRotate);
+		GridPaneUtils.addGridRow(paneType, row++, 0, "Optionally pass reader-specific arguments to the image provider.\nUsually this should just be left empty.", labelArgs, tfArgs);
+		GridPaneUtils.addGridRow(paneType, row++, 0, "Dynamically create image pyramids for large, single-resolution images", cbPyramidalize, cbPyramidalize);
+		GridPaneUtils.addGridRow(paneType, row++, 0, "Read and import objects (e.g. annotations) from the image file, if possible", cbImportObjects, cbImportObjects);
+		GridPaneUtils.addGridRow(paneType, row++, 0, "Show the 'Image selector' window whenever the same URI contains multiple images.\n"
 				+ "If this is turned off, then all images will be import.", cbImageSelector, cbImageSelector);
 		
 		paneImages.setCenter(paneList);
@@ -232,7 +234,7 @@ class ProjectImportImagesCommand {
 		
 //		TilePane paneButtons = new TilePane();
 //		paneButtons.getChildren().addAll(btnFile, btnURL, btnClipboard, btnFileList);
-		GridPane paneButtons = PaneTools.createColumnGridControls(btnFile, btnURL, btnClipboard, btnFileList);
+		GridPane paneButtons = GridPaneUtils.createColumnGridControls(btnFile, btnURL, btnClipboard, btnFileList);
 		paneButtons.setHgap(5);
 		paneButtons.setPadding(new Insets(5));
 		
@@ -254,7 +256,7 @@ class ProjectImportImagesCommand {
 							.stream()
 							.filter(f -> f.isFile() && !f.isHidden())
 							.map(f -> f.getAbsolutePath())
-							.collect(Collectors.toList());
+							.collect(Collectors.toCollection(ArrayList::new));
 					paths.removeAll(listView.getItems());
 					if (!paths.isEmpty())
 						listView.getItems().addAll(paths);
@@ -282,16 +284,6 @@ class ProjectImportImagesCommand {
 		Optional<ButtonType> result = dialog.showAndWait();
 		if (!result.isPresent() || result.get() != typeImport)
 			return Collections.emptyList();
-		
-//		// Do the actual import
-//		List<String> pathSucceeded = new ArrayList<>();
-//		List<String> pathFailed = new ArrayList<>();
-//		for (String path : listView.getItems()) {
-//			if (qupath.getProject().addImage(path.trim()))
-//				pathSucceeded.add(path);
-//			else
-//				pathFailed.add(path);
-//		}
 				
 		ImageType type = comboType.getValue();
 		Rotation rotation = comboRotate.getValue();
@@ -322,10 +314,9 @@ class ProjectImportImagesCommand {
 		
 		List<String> pathSucceeded = new ArrayList<>();
 		List<String> pathFailed = new ArrayList<>();
-		List<ProjectImageEntry<BufferedImage>> entries = new ArrayList<>();
-		Task<Collection<ProjectImageEntry<BufferedImage>>> worker = new Task<>() {
+		Task<List<ProjectImageEntry<BufferedImage>>> worker = new Task<>() {
 			@Override
-			protected Collection<ProjectImageEntry<BufferedImage>> call() throws Exception {
+			protected List<ProjectImageEntry<BufferedImage>> call() throws Exception {
 				AtomicLong counter = new AtomicLong(0L);
 				
 				List<String> items = new ArrayList<>(listView.getItems());
@@ -335,7 +326,6 @@ class ProjectImportImagesCommand {
 				// Limit the size of the thread pool
 				// The previous use of a cached thread pool caused trouble when importing may large, non-pyramidal images
 				var pool = Executors.newFixedThreadPool(ThreadTools.getParallelism(), ThreadTools.createThreadFactory("project-import", true));
-//				var pool = Executors.newCachedThreadPool(ThreadTools.createThreadFactory("project-import", true));
 				List<Future<List<ServerBuilder<BufferedImage>>>> results = new ArrayList<>();
 				List<ProjectImageEntry<BufferedImage>> projectImages = new ArrayList<>();
 				for (var item : items) {
@@ -360,10 +350,9 @@ class ProjectImportImagesCommand {
 							if (support != null)
 								return support.getBuilders();
 						} catch (Exception e) {
-							logger.error("Unable to add {}");
-							logger.error(e.getLocalizedMessage(), e);
+							logger.error("Unable to add " + item, e);
 						}
-						return new ArrayList<ServerBuilder<BufferedImage>>();
+						return new ArrayList<>();
 					}));
 				}
 				
@@ -395,6 +384,7 @@ class ProjectImportImagesCommand {
 				}
 				
 				long max = builders.size();
+				List<ProjectImageEntry<BufferedImage>> allAddedEntries = new ArrayList<>();
 				if (!builders.isEmpty()) {
 					if (max == 1)
 						updateMessage("Preparing to add 1 image to project");
@@ -404,7 +394,7 @@ class ProjectImportImagesCommand {
 					
 					if (showSelector && max > 1) {
 						var selector = ServerSelector.createFromBuilders(builders);
-						var selected = GuiTools.callOnApplicationThread(() -> {
+						var selected = FXUtils.callOnApplicationThread(() -> {
 							return selector.promptToSelectImages("Import");
 						});
 						builders.clear();
@@ -425,6 +415,7 @@ class ProjectImportImagesCommand {
 //							builder = RearrangeRGBImageServer.getSwapRedBlueBuilder(builder);
 						entries.add(project.addImage(builder));
 					}
+					allAddedEntries.addAll(entries);
 					
 					// Initialize (the slow bit)
 					int n = builders.size();
@@ -463,33 +454,20 @@ class ProjectImportImagesCommand {
 						message += "\nThe image type might not be supported by '" + requestedBuilder.getName() + "'";
 					Dialogs.showErrorMessage("Import images", message);
 					
-					var toRemove = failures.stream().filter(p -> project.getImageList().contains(p)).collect(Collectors.toList());
+					var toRemove = failures.stream().filter(p -> project.getImageList().contains(p)).toList();
 					project.removeAllImages(toRemove, true);
 				}
 				
 				// Now save changes
 				project.syncChanges();
 				
-				
-//				builders.parallelStream().forEach(builder -> {
-////				builders.parallelStream().forEach(builder -> {
-//					try (var server =  builder.build()) {
-//						var entry = addSingleImageToProject(project, server);
-//						updateMessage("Added " + entry.getImageName());
-//					} catch (Exception e) {
-//						logger.warn("Exception adding " + builder, e);
-//					} finally {
-//						updateProgress(counter.incrementAndGet(), max);
-//					}
-//				});
-				
 				updateProgress(max, max);
-				return entries;
+				return allAddedEntries;
 	         }
 		};
 		ProgressDialog progress = new ProgressDialog(worker);
 		progress.setTitle("Project import");
-		qupath.submitShortTask(worker);
+		qupath.getThreadPoolManager().submitShortTask(worker);
 		progress.showAndWait();
 		try {
 			project.syncChanges();
@@ -523,7 +501,15 @@ class ProjectImportImagesCommand {
 		// TODO: Add failed and successful paths to pathFailed/pathSucceeded, so the line below prints something
 		if (sb.length() > 0)
 			logger.info(sb.toString());
-		return entries;
+
+		List<ProjectImageEntry<BufferedImage>> results = new ArrayList<>();
+		try {
+			results = worker.get();
+		} catch (Exception e) {
+			logger.error("Exception importing project entries", e);
+			results = Collections.emptyList();
+		}
+		return results;
 	}
 	
 	
@@ -540,7 +526,7 @@ class ProjectImportImagesCommand {
 	
 	
 	static boolean loadFromFileChooser(final List<String> list) {
-		List<File> files = Dialogs.promptForMultipleFiles(commandName, null, null);
+		List<File> files = FileChoosers.promptForMultipleFiles(commandName);
 		if (files == null)
 			return false;
 		boolean changes = false;
@@ -557,7 +543,7 @@ class ProjectImportImagesCommand {
 	
 	
 	static boolean loadFromSingleURL(final List<String> list) {
-		String path = Dialogs.promptForFilePathOrURL("Choose image path", null, null, null);
+		String path = FileChoosers.promptForFilePathOrURI("Choose image path", "");
 		if (path == null)
 			return false;
 		if (list.contains(path)) {
@@ -570,7 +556,8 @@ class ProjectImportImagesCommand {
 	
 
 	static int loadFromTextFile(final List<String> list) {
-		File file = Dialogs.promptForFile(commandName, null, "Text file", new String[]{"txt", "csv"});
+		File file = FileChoosers.promptForFile(commandName,
+				FileChoosers.createExtensionFilter("Text file", "*.txt", "*.csv"));
 		if (file == null)
 			return 0;
 		if (file.length() / 1024 / 1024 > 5) {
