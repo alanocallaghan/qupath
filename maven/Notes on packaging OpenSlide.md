@@ -22,7 +22,7 @@ brew install gdk-pixbuf --with-included-loaders=yes
 
 The default settings are fine for local installations.  They are also mostly ok for portable ones, except that certains files can’t be opened.  Specifically, some ```.mrxs``` files (which involved bmps?) were failing to load.
 
-> Note: the ‘official’ Windows build script also uses this setting (somewhere around [here](https://github.com/openslide/openslide-winbuild/blob/master/build.sh#L515)).
+> Note: the ‘official’ Windows build script also uses this setting (somewhere around [here](https://github.com/openslide/openslide-winbuild/blob/b5dda39eb5773f8ef09fa474b1ffce5b03a703f9/build.sh#L515)).
 
 
 ### Compile OpenSlide Java interface
