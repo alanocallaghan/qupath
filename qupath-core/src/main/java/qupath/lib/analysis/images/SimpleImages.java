@@ -22,6 +22,13 @@
 package qupath.lib.analysis.images;
 
 
+import net.imglib2.RandomAccess;
+import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.type.numeric.ComplexType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 /**
  * Create {@link SimpleImage SimpleImage} instances for basic pixel processing.
  * 
@@ -122,6 +129,59 @@ public class SimpleImages {
 			if (direct)
 				return data;
 			return data.clone();
+		}
+
+	}
+
+	/**
+	 * Implementation of a SimpleImage backed by an array of floats.
+	 *
+	 * @author Pete Bankhead
+	 *
+	 */
+	static class RandomAccessibleIntervalSimpleImage<T extends ComplexType<T>> implements SimpleModifiableImage {
+		private static final Logger logger = LoggerFactory.getLogger(RandomAccessibleIntervalSimpleImage.class);
+
+		private RandomAccessibleInterval<T> rai;
+		private RandomAccess<? extends ComplexType<?>> randomAccess;
+		public RandomAccessibleIntervalSimpleImage(RandomAccessibleInterval<T> rai) {
+			this.rai = rai;
+			this.randomAccess = rai.randomAccess();
+		}
+
+		@Override
+		public float getValue(int x, int y) {
+			return randomAccess.setPositionAndGet(x, y).getRealFloat();
+		}
+
+		@Override
+		public void setValue(int x, int y, float val) {
+			randomAccess.setPositionAndGet(x, y).setReal(val);
+		}
+
+		@Override
+		public int getWidth() {
+			return (int)rai.dimension(0);
+		}
+
+		@Override
+		public int getHeight() {
+			return (int) rai.dimension(1);
+		}
+
+		@Override
+		public float[] getArray(boolean direct) {
+			if (direct) {
+				logger.warn("Can't return direct pixel array from an RAI");
+			}
+			float[] data = new float[getWidth() * getHeight()];
+			var counter = 0;
+			for (int x = 0; x < getWidth(); x++) {
+				for (int y = 0; y < getHeight(); y++) {
+					data[counter++] = randomAccess.setPositionAndGet(x, y).getRealFloat();
+				}
+			}
+			return data;
 		}
 
 	}
