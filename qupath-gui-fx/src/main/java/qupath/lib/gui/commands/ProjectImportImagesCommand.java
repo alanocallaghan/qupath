@@ -163,15 +163,20 @@ class ProjectImportImagesCommand {
 	             } else {
 	            	 if (item == null)
 	            		 setText("Default (let QuPath decide)");
-	            	 else
-	            		 setText(item.getName());
+	            	 else {
+						 // Make the name a little more readable, without adding confusing
+						 String name = item.getName();
+						 if (name.toLowerCase().endsWith("builder"))
+							 name = name.substring(0, name.length()-"builder".length()).strip();
+						 setText(name);
+					 }
 	             }
 	         }
 		}
 		
 		boolean requestBuilder = builder == null;
 		ComboBox<ImageServerBuilder<BufferedImage>> comboBuilder = new ComboBox<>();
-		Label labelBuilder = new Label("Image provider");
+		Label labelBuilder = new Label("Image server");
 		if (requestBuilder) {
 			comboBuilder.setCellFactory(p -> new BuilderListCell());
 			comboBuilder.setButtonCell(new BuilderListCell());
@@ -262,6 +267,7 @@ class ProjectImportImagesCommand {
 						listView.getItems().addAll(paths);
 				} catch (Exception ex) {
 					Dialogs.showErrorMessage("Drag & Drop", ex);
+					logger.error(ex.getMessage(), ex);
 				}
 			}
 			e.setDropCompleted(true);
@@ -473,6 +479,7 @@ class ProjectImportImagesCommand {
 			project.syncChanges();
 		} catch (IOException e1) {
 			Dialogs.showErrorMessage("Sync project", e1);
+			logger.error(e1.getMessage(), e1);
 		}
 		qupath.refreshProject();
 		
@@ -749,7 +756,7 @@ class ProjectImportImagesCommand {
 			if (imageDisplay == null) {
 				// By wrapping the thumbnail, we avoid slow z-stack/time series requests & determine brightness & contrast just from one plane
 				var wrappedServer = new WrappedBufferedImageServer("Dummy", img2, server.getMetadata().getChannels());
-				imageDisplay = new ImageDisplay(new ImageData<>(wrappedServer));
+				imageDisplay = ImageDisplay.create(new ImageData<>(wrappedServer));
 //				imageDisplay = new ImageDisplay(new ImageData<>(server));
 			}
 			for (ChannelDisplayInfo info : imageDisplay.selectedChannels()) {

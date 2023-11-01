@@ -4,7 +4,7 @@
  * %%
  * Copyright (C) 2014 - 2016 The Queen's University of Belfast, Northern Ireland
  * Contact: IP Management (ipmanagement@qub.ac.uk)
- * Copyright (C) 2018 - 2020 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2018 - 2023 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -73,7 +73,7 @@ import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.classes.PathClassTools;
 import qupath.lib.plugins.AbstractInteractivePlugin;
-import qupath.lib.plugins.PluginRunner;
+import qupath.lib.plugins.TaskRunner;
 import qupath.lib.plugins.parameters.ParameterList;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.regions.RegionRequest;
@@ -92,9 +92,9 @@ public class SubcellularDetection extends AbstractInteractivePlugin<BufferedImag
 	
 	
 	@Override
-	public boolean runPlugin(final PluginRunner<BufferedImage> pluginRunner, final String arg) {
-		boolean success = super.runPlugin(pluginRunner, arg);
-		getHierarchy(pluginRunner).fireHierarchyChangedEvent(this);
+	public boolean runPlugin(final TaskRunner taskRunner, final ImageData<BufferedImage> imageData, final String arg) {
+		boolean success = super.runPlugin(taskRunner, imageData, arg);
+		imageData.getHierarchy().fireHierarchyChangedEvent(this);
 		return success;
 	}
 	
@@ -441,10 +441,10 @@ public class SubcellularDetection extends AbstractInteractivePlugin<BufferedImag
 	}
 
 	@Override
-	protected Collection<PathObject> getParentObjects(final PluginRunner<BufferedImage> runner) {
+	protected Collection<PathObject> getParentObjects(final ImageData<BufferedImage> imageData) {
 		Collection<Class<? extends PathObject>> parentClasses = getSupportedParentObjectClasses();
 		List<PathObject> parents = new ArrayList<>();
-		for (PathObject parent : getHierarchy(runner).getSelectionModel().getSelectedObjects()) {
+		for (PathObject parent : imageData.getHierarchy().getSelectionModel().getSelectedObjects()) {
 			for (Class<? extends PathObject> cls : parentClasses) {
 				if (cls.isAssignableFrom(parent.getClass())) {
 					parents.add(parent);

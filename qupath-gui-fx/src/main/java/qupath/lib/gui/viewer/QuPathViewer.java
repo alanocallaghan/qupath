@@ -222,8 +222,7 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 	private double yCenter = 0;
 	private DoubleProperty downsampleFactor = new SimpleDoubleProperty(1.0);
 	private DoubleProperty rotationProperty = new SimpleDoubleProperty(0);
-	private BooleanProperty zoomToFit = new SimpleBooleanProperty(false);
-	
+
 	private DoubleProperty gammaProperty = new SimpleDoubleProperty(1.0);
 	
 	// Affine transform used to apply rotation
@@ -310,26 +309,12 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 		});
 		
 		canvas.widthProperty().addListener((e, f, g) -> {
-			if (getZoomToFit()) {
-				centerImage();
-				// Make sure the downsample factor is being continually updated
-				downsampleFactor.set(getZoomToFitDownsampleFactor());
-				repaint();
-			} else {
-				updateAffineTransform();
-				repaint();
-			}
+			updateAffineTransform();
+			repaint();
 		});
 		canvas.heightProperty().addListener((e, f, g) -> {
-			if (getZoomToFit()) {
-				centerImage();
-				// Make sure the downsample factor is being continually updated
-				downsampleFactor.set(getZoomToFitDownsampleFactor());
-				repaint();
-			} else {
-				updateAffineTransform();
-				repaint();
-			}
+			updateAffineTransform();
+			repaint();
 		});
 		
 		pane = new StackPane();
@@ -538,7 +523,7 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 	public void repaint() {
 		if (repaintRequested && minimumRepaintSpacingMillis <= 0)
 			return;
-		
+
 		// We need to repaint everything if the display changed
 		if (imageDisplay != null && (lastDisplayChangeTimestamp != imageDisplay.getLastChangeTimestamp())) {
 			repaintEntireImage();
@@ -547,7 +532,7 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 		
 		logger.trace("Repaint requested!");
 		repaintRequested = true;
-		
+
 		Platform.runLater(() -> paintCanvas());
 	}
 
@@ -630,8 +615,10 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 	private InvalidationListener repainterEntire = new InvalidationListener() {
 		@Override
 		public void invalidated(Observable observable) {
-			background = ColorToolsAwt.getCachedColor(PathPrefs.viewerBackgroundColorProperty().get());
-			repaintEntireImage();
+			Platform.runLater(() -> {
+				background = ColorToolsAwt.getCachedColor(PathPrefs.viewerBackgroundColorProperty().get());
+				repaintEntireImage();
+			});
 		}
 	};
 	
@@ -765,22 +752,20 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 
 	/**
 	 * Create a new viewer.
-	 * @param imageData image data to show within the viewer
 	 * @param regionStore store used to tile caching
 	 * @param overlayOptions overlay options to control the viewer display
 	 */
-	public QuPathViewer(final ImageData<BufferedImage> imageData, DefaultImageRegionStore regionStore, OverlayOptions overlayOptions) {
-		this(imageData, regionStore, overlayOptions, new ImageDisplay(null));
+	public QuPathViewer(DefaultImageRegionStore regionStore, OverlayOptions overlayOptions) {
+		this(regionStore, overlayOptions, new ImageDisplay());
 	}
 	
 	/**
 	 * Create a new viewer.
-	 * @param imageData image data to show within the viewer
 	 * @param regionStore store used to tile caching
 	 * @param overlayOptions overlay options to control the viewer display
 	 * @param imageDisplay image display used to control the image display (conversion to RGB)
 	 */
-	public QuPathViewer(final ImageData<BufferedImage> imageData, DefaultImageRegionStore regionStore, OverlayOptions overlayOptions, ImageDisplay imageDisplay) {
+	private QuPathViewer(DefaultImageRegionStore regionStore, OverlayOptions overlayOptions, ImageDisplay imageDisplay) {
 		super();
 
 		this.regionStore = regionStore;
@@ -826,13 +811,15 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 		//		setDebugGraphicsOptions(DebugGraphics.LOG_OPTION);
 
 		this.imageDisplay = imageDisplay;
+		if (imageDisplay != null)
+			imageDisplay.changeTimestampProperty().addListener(repainterEntire);
 
 		// Prepare overlay layers
 		customOverlayLayers.addListener((Change<? extends PathOverlay> e) -> refreshAllOverlayLayers());
 		coreOverlayLayers.addListener((Change<? extends PathOverlay> e) -> refreshAllOverlayLayers());
 		allOverlayLayers.addListener((Change<? extends PathOverlay> e) -> repaint());
 		
-		hierarchyOverlay = new HierarchyOverlay(this.regionStore, overlayOptions, imageData);
+		hierarchyOverlay = new HierarchyOverlay(this.regionStore, overlayOptions, null);
 		tmaGridOverlay = new TMAGridOverlay(overlayOptions);
 		gridOverlay = new GridOverlay(overlayOptions);
 //		pixelLayerOverlay = new PixelLayerOverlay(this);
@@ -843,8 +830,6 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 				hierarchyOverlay,
 				gridOverlay
 		);
-
-		setImageData(imageData);
 
 		this.regionStore.addTileListener(this);
 
@@ -879,15 +864,6 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 			updateThumbnail(false);
 			repaint();
 			fireVisibleRegionChangedEvent(getDisplayedRegionShape());
-		});
-		
-		zoomToFit.addListener((v, o, n) -> {
-			if (zoomToFit.get()) {
-				setDownsampleFactorImpl(getZoomToFitDownsampleFactor(), -1, -1);
-				centerImage();
-			}
-			imageUpdated = true;
-			repaint();
 		});
 		
 		rotationProperty.addListener((v, o, n) -> {
@@ -1424,20 +1400,14 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 	}
 
 	/**
-	 * Returns the value of {@link #zoomToFitProperty()}.
+	 * Request that the downsample is set to contain the entire image, and the image is centered in the viewer.
 	 * @return
 	 */
-	public boolean getZoomToFit() {
-		return zoomToFit.get();
-	}
-	
-	/**
-	 * Property to request that the downsample and location properties are adjusted automatically to fit the 
-	 * current image within the available viewer component.
-	 * @return
-	 */
-	public BooleanProperty zoomToFitProperty() {
-		return zoomToFit;
+	public void zoomToFit() {
+		if (getServer() == null)
+			return;
+		setDownsampleFactorImpl(getZoomToFitDownsampleFactor(), -1, -1);
+		centerImage();
 	}
 
 	/**
@@ -1519,10 +1489,13 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 	 * Set the current image for this viewer.
 	 * @param imageDataNew
 	 */
-	public void setImageData(ImageData<BufferedImage> imageDataNew) {
+	public void setImageData(ImageData<BufferedImage> imageDataNew) throws IOException {
 		if (this.imageDataProperty.get() == imageDataNew)
 			return;
-		
+
+		// We want to stop caching the hierarchy
+		hierarchyOverlay.resetImageData();
+
 		imageDataChanging.set(true);
 		
 		// Remove listeners for previous hierarchy
@@ -1567,8 +1540,17 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 					}
 				}
 			}
-			if (!displaySet)
-				imageDisplay.setImageData(imageDataNew, keepDisplay);
+			if (!displaySet) {
+				try {
+					imageDisplay.setImageData(imageDataNew, keepDisplay);
+				} catch (Exception | UnsatisfiedLinkError e2) {
+					// This can fail if the image isn't actually open-able.
+					// If we don't reset, then the viewer will be in a bad state and continually through exceptions.
+					logger.warn("Caught exception setting ImageData - will reset to null ({})", e2.getMessage());
+					setImageData(null);
+					throw e2;
+				}
+			}
 			
 			// For non-RGB images, the channel colors in our server metadata might now be out of sync with the 
 			// brightness/contrast, based upon whatever we extracted from the image properties or kept from the last image.
@@ -1625,10 +1607,25 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 		// TODO: Consider shifting, fixing magnification, repainting etc.
 		if (isShowing())
 			repaint();
-		
-		logger.info("Image data set to {}", imageDataNew);
+
+		if (imageDataNew == null)
+			logger.info("Image data reset");
+		else
+			logger.info("Image data set to {}", imageDataNew);
 	}
-	
+
+
+	/**
+	 * Reset the image data to null.
+	 */
+	public void resetImageData() {
+		try {
+			setImageData(null);
+		} catch (IOException e) {
+			// Should not happen - exception only 'expected' when an image cannot be read
+			logger.error("Error resetting image data", e);
+		}
+	}
 	
 	
 	/**
@@ -1735,7 +1732,6 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 		imageUpdated = true;
 		if (imageDisplay != null)
 			lastDisplayChangeTimestamp = imageDisplay.getLastChangeTimestamp();
-//		ensureGammaUpdated();
 		updateThumbnail();
 		repaint();		
 	}
@@ -2433,10 +2429,6 @@ public class QuPathViewer implements TileListener<BufferedImage>, PathObjectHier
 	 * to the range <code>getMinDownsample</code> to <code>getMaxDownsample</code>.
 	 */
 	public void setDownsampleFactor(double downsampleFactor, double cx, double cy, boolean clipToMinMax) {
-		
-		// Don't allow setting if we have 'zoom to fit'
-		if (getZoomToFit())
-			return;
 		
 		// Ensure within range, if necessary
 		if (clipToMinMax)

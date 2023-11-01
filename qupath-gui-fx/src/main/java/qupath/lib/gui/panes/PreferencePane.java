@@ -45,9 +45,11 @@ import org.controlsfx.control.PropertySheet;
 import org.controlsfx.control.PropertySheet.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import qupath.fx.dialogs.Dialogs;
 import qupath.fx.localization.LocaleManager;
 import qupath.fx.localization.LocaleSnapshot;
+import qupath.fx.prefs.controlsfx.PropertyEditorFactory;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.fx.prefs.controlsfx.PropertyItemParser;
 import qupath.fx.prefs.controlsfx.PropertySheetBuilder;
@@ -71,6 +73,7 @@ import qupath.lib.gui.prefs.PathPrefs.FontSize;
 import qupath.lib.gui.prefs.PathPrefs.ImageTypeSetting;
 import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.lib.gui.prefs.QuPathStyleManager.StyleOption;
+import qupath.lib.gui.prefs.SystemMenuBar;
 import qupath.lib.gui.tools.CommandFinderTools;
 import qupath.lib.gui.tools.CommandFinderTools.CommandBarDisplay;
 
@@ -114,11 +117,19 @@ public class PreferencePane {
 	}
 	
 	private PropertySheet createPropertySheet() {
+		var factory = new PropertyEditorFactory();
+		factory.setReformatEnums(
+				SystemMenuBar.SystemMenuBarOption.class,
+				FontWeight.class,
+				FontSize.class,
+				LogLevel.class,
+				Level.class);
 		var parser = new PropertyItemParser()
 				.setResourceManager(QuPathResources.getLocalizedResourceManager())
 				.setLocaleManager(new LocaleManager(QuPathResources::hasDefaultBundleForLocale));
 		return new PropertySheetBuilder()
 				.parser(parser)
+				.editorFactory(factory)
 				.addAnnotatedProperties(new AppearancePreferences())
 				.addAnnotatedProperties(new GeneralPreferences())
 				.addAnnotatedProperties(new UndoRedoPreferences())
@@ -191,10 +202,13 @@ public class PreferencePane {
 		
 		@Pref(value = "Prefs.Appearance.theme", type = StyleOption.class, choiceMethod = "getStyles")
 		public final ObjectProperty<StyleOption> theme = QuPathStyleManager.selectedStyleProperty();
-		
+
 		@Pref(value = "Prefs.Appearance.font", type = QuPathStyleManager.Fonts.class)
 		public final ObjectProperty<QuPathStyleManager.Fonts> autoUpdate = QuPathStyleManager.fontProperty();
-		
+
+		@BooleanPref(value = "Prefs.Appearance.badges")
+		public final BooleanProperty badges = PathPrefs.showToolBarBadgesProperty();
+
 		public final ObservableList<StyleOption> getStyles() {
 			return QuPathStyleManager.availableStylesProperty();
 		}
@@ -211,8 +225,8 @@ public class PreferencePane {
 		@Pref(value = "Prefs.General.checkForUpdates", type = AutoUpdateType.class)
 		public final ObjectProperty<AutoUpdateType> autoUpdate = PathPrefs.autoUpdateCheckProperty();
 
-		@BooleanPref("Prefs.General.systemMenubar")
-		public final BooleanProperty systemMenubar = PathPrefs.useSystemMenubarProperty();
+		@Pref(value = "Prefs.General.systemMenubar", type = SystemMenuBar.SystemMenuBarOption.class)
+		public final ObjectProperty<SystemMenuBar.SystemMenuBarOption> systemMenubar = SystemMenuBar.systemMenubarProperty();
 		
 		@DoublePref("Prefs.General.maxMemory")
 		public final DoubleProperty maxMemoryGB = PathPrefs.hasJavaPreferences() ? createMaxMemoryProperty() : null;

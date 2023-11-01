@@ -4,7 +4,7 @@
  * %%
  * Copyright (C) 2014 - 2016 The Queen's University of Belfast, Northern Ireland
  * Contact: IP Management (ipmanagement@qub.ac.uk)
- * Copyright (C) 2018 - 2020 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2018 - 2023 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -58,8 +58,7 @@ import qupath.lib.objects.TMACoreObject;
 import qupath.lib.objects.hierarchy.DefaultTMAGrid;
 import qupath.lib.objects.hierarchy.TMAGrid;
 import qupath.lib.plugins.AbstractPlugin;
-import qupath.lib.plugins.CommandLinePluginRunner;
-import qupath.lib.plugins.PluginRunner;
+import qupath.lib.plugins.CommandLineTaskRunner;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
 
@@ -86,7 +85,7 @@ public class TMADataIO {
 	 * @param file
 	 * @param imageData
 	 */
-	public static void writeTMAData(File file, final ImageData<BufferedImage> imageData) {
+	public static void writeTMAData(File file, final ImageData<BufferedImage> imageData) throws IOException {
 		writeTMAData(file, imageData, null, -1);
 	}
 	
@@ -98,7 +97,7 @@ public class TMADataIO {
 	 * @param overlayOptions 
 	 * @param downsampleFactor The downsample factor used for the TMA cores. If NaN, an automatic downsample value will be selected (&gt;= 1).  If &lt;= 0, no cores are exported.
 	 */
-	public static void writeTMAData(File file, final ImageData<BufferedImage> imageData, OverlayOptions overlayOptions, final double downsampleFactor) {
+	public static void writeTMAData(File file, final ImageData<BufferedImage> imageData, OverlayOptions overlayOptions, final double downsampleFactor) throws IOException {
 		if (imageData == null || imageData.getHierarchy() == null || imageData.getHierarchy().getTMAGrid() == null) {
 			logger.error("No TMA data available to save!");
 			return;
@@ -199,11 +198,9 @@ public class TMADataIO {
 					.downsamples(downsample)
 					.build();
 			ExportCoresPlugin plugin = new ExportCoresPlugin(dirData, renderedImageServer, downsample, coreExt);
-			PluginRunner<BufferedImage> runner;
 			var qupath = QuPathGUI.getInstance();
 			if (qupath == null || qupath.getImageData() != imageData) {
-				runner = new CommandLinePluginRunner<>(imageData);
-				plugin.runPlugin(runner, null);
+				plugin.runPlugin(new CommandLineTaskRunner(), imageData,null);
 			} else {
 				try {
 					qupath.runPlugin(plugin, null, false);
@@ -338,8 +335,8 @@ public class TMADataIO {
 		}
 
 		@Override
-		protected Collection<? extends PathObject> getParentObjects(PluginRunner<BufferedImage> runner) {
-			return PathObjectTools.getTMACoreObjects(getHierarchy(runner), true);
+		protected Collection<? extends PathObject> getParentObjects(ImageData<BufferedImage> imageData) {
+			return PathObjectTools.getTMACoreObjects(imageData.getHierarchy(), true);
 		}
 
 		@Override

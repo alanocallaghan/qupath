@@ -2,8 +2,82 @@
 
 This is a work-in-progress for the next QuPath release.
 
+> **Important!** Some older extensions will need to be updated to work with QuPath v0.5.
+
+### Enhancements
+
+#### User interface
+* New toolbar badges & context help
+  * Click the `?` icon in the toolbar to view the help
+  * Find tips or warnings to help avoid common errors
+* Major upgrade to the brightness/contrast/channels command, including
+  * Save/restore display settings in projects
+    * Import display settings by drag & drop
+  * Optionally view log counts for channel histograms
+  * For multi-channel (non-RGB images):
+    * Better support to toggle channels on/off
+    * Remember previous selection when switching between grayscale & color
+    * More quickly change channel colors (the square icon is now a color picker)
+* Better support for viewing multiple images simultaneously
+  * New 'Grid size' commands to quickly create a grid of viewers
+  * Optionally synchronize display settings across images
+  * Optionally 'detach' a viewer to see it in a separate window
+  * 'Synchronize viewers' is now a persistent preference, which is turned *off* by default
+* *'Zoom to fit'* is now a regular button, not a persistent toggle button
+  * Clicking 'Zoom to fit' updates the current viewer, but doesn't 'lock' its status to block panning/zooming further
+* Completely new log viewer to access more logging information
+  * Find the code at https://github.com/qupath/log-viewer
+  * Includes badge to highlight errors that have occurred when the log viewer is closed
+  * Information about the logger class & thread
+* New extension manager to add, remove & update extensions
+* New toolbar buttons for the script editor `</>`, log viewer, fill/unfill annotations
+* *File → Export snapshots* supports PNG, JPEG and TIFF (not just PNG)
+* Support sorting project entries by name, ID, and URI
+  * Right-click on the project list to access the *Sort by...* menu
+* Improved script editor auto-complete (https://github.com/qupath/qupath/pull/1357)
+  * Activate with *Ctrl + space*, cancel with *Esc*
+  * Completions update while typing
+* Support for regular expressions in several 'filter' fields, e.g. for projects, channels, log messages & measurements
+* `MeasurementList.asMap()` returns `Map<String, Number` rather than `Map<String, Double>`
+  * This enables scripts to use `pathObject.measurements['Name'] = 2` rather than `pathObject.measurements['Name'] = 2d`
+
+#### Naming & measurements
+* Improve consistency of naming, including for measurements
+  * Use 'classification' rather then 'class' (to reduce confusion with Java 'classes')
+  * Add a new 'Object type' measurement to tables, giving a readable string ('Annotation', 'Detection', 'Cell' etc.)
+  * No longer show a default 'Name' if no name has been set
+    * e.g. don't show 'PathAnnotationObject' or the classification as a placeholder, since this causes confusion for people writing scripts and requesting the name
+
+#### Processing & analysis
+* Includes *pre-release* of OpenSlide 4.0.0
+  * Final OpenSlide v4.0.0 release expected to be included in QuPath v0.5.0
+  * Supports Apple Silicon without needing to install it separately (see below)
+  * Optionally set a directory in QuPath's preferences to use your *own* OpenSlide build
+* Faster processing & reduced memory use for pixel classification measurements (https://github.com/qupath/qupath/pull/1332)
+* New *Objects → Annotations... → Split annotations by lines* command (https://github.com/qupath/qupath/pull/1349)
+* New `ObjectMerger` class to simplify creating new tile-based segmentation methods (https://github.com/qupath/qupath/pull/1346)
+* New `Tiler` class to generate tiles within other objects (https://github.com/qupath/qupath/pull/1347) (https://github.com/qupath/qupath/pull/1349) (https://github.com/qupath/qupath/issues/1277)
+* Replaced `PluginRunner` with `TaskRunner` to more easily run tasks with a progress bar (https://github.com/qupath/qupath/pull/1360)
+
+#### Platforms
+* Much improved Apple Silicon support, including with OpenSlide
+  * See [below](#important-info-for-mac-users) for details
+
+#### Import & export
+* SVG export now supports overlays (https://github.com/qupath/qupath/issues/1272)
+* Rendered image export now supports overlay opacity (https://github.com/qupath/qupath/issues/1292)
+
+#### Code refactoring
+* New `qupath-fxtras` project for general-purpose JavaFX use
+  * Code at https://github.com/qupath/qupath-fxtras
+* Ongoing work to simplify QuPath's code & API, including
+  * Previous `Dialogs` class has moved to `qupath-fxtras`
+  * `ActionTools` has changed package
+  * Much smaller `QuPathGUI` class
+  * *These changes will require some extensions to be updated*
+* Initial work to support string localization
+
 ### Bugs fixed
-* Rendered image export does not support opacity (https://github.com/qupath/qupath/issues/1292)
 * Cannot import GeoJSON with NaN measurements (https://github.com/qupath/qupath/issues/1293)
 * `isOverlayNG` should be turned on by default (https://github.com/qupath/qupath/issues/1244)
 * Labeled image instance export doesn't work as expected for z-stacks (https://github.com/qupath/qupath/issues/1267)
@@ -13,20 +87,86 @@ This is a work-in-progress for the next QuPath release.
 * PathIO doesn't restore backup if writing ImageData fails (https://github.com/qupath/qupath/issues/1252)
 * Scripts open with the caret at the bottom of the text rather than the top (https://github.com/qupath/qupath/issues/1258)
 * 'Synchronize viewers' ignores z and t positions (https://github.com/qupath/qupath/issues/1220)
+* Menubars and shortcuts are confused when ImageJ is open but QuPath is in focus in macOS (https://github.com/qupath/qupath/issues/6)
+* Slide label can be too big for the screen (https://github.com/qupath/qupath/issues/1263)
+* Slide label doesn't update as expected when changing the image (https://github.com/qupath/qupath/issues/1246)
+* Several bug fixes in the view tracker (https://github.com/qupath/qupath/pull/1329)
+* Occasional misleading 'Reader is null - was the image already closed?' exceptions (https://github.com/qupath/qupath/issues/1265)
+* Using existing channel names (e.g. 'Red', 'Green', 'Blue') for color deconvolution can confuse brightness/contrast settings (https://github.com/qupath/qupath/issues/1245)
+* The centroid-to-centroid distance between an object & itself can be > 0 (https://github.com/qupath/qupath/issues/1249)
+* Importing objects from .qpdata including TMA cores can result in an 'invisible' TMA grid (https://github.com/qupath/qupath/issues/1303)
+
+
+### Important info for Mac users
+
+#### Improved Apple Silicon support
+
+The inclusion of all-new OpenSlide builds has enabled us to include better support for Apple Silicon.
+
+This means that *almost everything* in QuPath should now work on recent M1/M2 Macs. 
+The only exception is that Bio-Formats does not support Apple Silicon for a subset of file formats, specifically
+* Images with JPEG-XR compression
+  * The includes most CZI whole slide images from Zeiss
+* Images that use libjpeg-turbo
+  * This includes NDPI files - but most of these can be read with OpenSlide anyway
+
+Apple Silicon users can download the x64 (Intel) version for use with these formats.
+
+#### Installed packages include the version & architecture
+
+*QuPath.app* is now renamed to *QuPath-v0.5.0-x64.app* (Intel processors) or *QuPath-v0.5.0-aarch64.app* (Apple Silicon).
+
+The more awkward naming is in recognition of the fact that users often want to retain multiple versions of QuPath on their computer.
+Also, many Apple Silicon users may require installing *both* versions if they need to work with a mixture of supported and unsupported file formats.
+
+Previously, versions could replace one another unless they were manually renamed - but that is no longer required.
+
+#### Installation notes
+
+Because QuPath is not signed, it is necessary to right-click and choose *Open* to run it for the first time [as described here](https://qupath.readthedocs.io/en/latest/docs/intro/installation.html).
+
+Before release, there was also a problem on some Macs where QuPath didn't have permission to access files.
+This is hopefully resolved now, but if it occurs then launching QuPath from `Terminal.app` can help, e.g.
+```
+/Applications/QuPath-v0.5.0-x64.app/Contents/MacOS/QuPath
+```
+
+#### QuPath will require macOS 11 in the future
+
+After v0.5, QuPath will require macOS 11 or later to run on Mac.
+
+This is because of recent changes in JavaFX - for more details, see [here](https://github.com/openjdk/jfx/blob/master/doc-files/release-notes-21.md#javafx-requires-macos-11-or-later) and [here](https://bugs.openjdk.org/browse/JDK-8308114).
+
+#### Startup may be slower
+
+QuPath may take a little longer to start up than previously, especially with macOS 14. 
+This appears to be related to time spent initializing JavaFX.
 
 ### Dependency updates
-* Bio-Formats 7.0.0
-* DeepJavaLibrary 0.23.0
-* Groovy 4.0.14
+* Bio-Formats 7.0.1
+* DeepJavaLibrary 0.24.0
+* Groovy 4.0.15
+* Guava 32.1.3-jre
 * ImageJ 1.54f
 * JavaCPP 1.5.9
-* JavaFX 20.0.2
+* JavaFX 20
 * Logback 1.3.11
 * OpenCV 4.7.0
-* Picocli 4.7.4
-* RichTextFX 0.11.1
-* SLF4J 2.0.7
+* OpenSlide 4.0.0
+* Picocli 4.7.5
+* RichTextFX 0.11.2
+* SLF4J 2.0.9
+* snakeyaml 2.2
 
+
+## Version 0.4.4
+
+This is a *minor release* that aims to be fully compatible with previous v0.4.x releases, while fixing one bug.
+
+> A bigger update (v0.5.0) is planned for release before the [QuPath Training Course in San Diego (October 9-11, 2023)](https://forum.image.sc/t/upcoming-qupath-training-course-october-9-11-san-diego/83751).
+
+### Bug fixed
+* Derived classifications can be read incorrectly from data files and json (https://github.com/qupath/qupath/issues/1306)
 
 
 ## Version 0.4.3

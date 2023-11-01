@@ -49,12 +49,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 import javax.imageio.ImageIO;
 import javax.script.ScriptException;
 import javax.swing.SwingUtilities;
 
+import javafx.beans.value.ObservableValue;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.stage.Window;
 import org.controlsfx.control.action.Action;
@@ -101,9 +105,11 @@ import javafx.stage.WindowEvent;
 import qupath.fx.utils.FXUtils;
 import qupath.fx.dialogs.FileChoosers;
 import qupath.lib.common.GeneralTools;
+import qupath.lib.common.LogTools;
 import qupath.lib.common.Timeit;
 import qupath.lib.common.Version;
 import qupath.lib.gui.actions.ActionTools;
+import qupath.lib.gui.actions.AutomateActions;
 import qupath.lib.gui.actions.CommonActions;
 import qupath.lib.gui.actions.OverlayActions;
 import qupath.lib.gui.actions.ViewerActions;
@@ -123,6 +129,7 @@ import qupath.lib.gui.panes.ServerSelector;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.prefs.PathPrefs.ImageTypeSetting;
 import qupath.lib.gui.prefs.QuPathStyleManager;
+import qupath.lib.gui.prefs.SystemMenuBar;
 import qupath.lib.gui.scripting.ScriptEditor;
 import qupath.lib.gui.scripting.languages.GroovyLanguage;
 import qupath.lib.gui.scripting.languages.ScriptLanguageProvider;
@@ -159,7 +166,6 @@ import qupath.lib.gui.scripting.DefaultScriptEditor;
 import qupath.lib.gui.scripting.QPEx;
 
 
-
 /**
  * Main GUI for QuPath, written using JavaFX.
  * 
@@ -169,7 +175,7 @@ import qupath.lib.gui.scripting.QPEx;
 public class QuPathGUI {
 	
 	private static final Logger logger = LoggerFactory.getLogger(QuPathGUI.class);
-	
+
 	private static QuPathGUI instance;
 	
 	/**
@@ -181,19 +187,19 @@ public class QuPathGUI {
 	private HostServices hostServices;
 	private MenuBar menuBar;
 
-	private DefaultImageRegionStore imageRegionStore = ImageRegionStoreFactory.createImageRegionStore();
+	private DefaultImageRegionStore imageRegionStore;
 
-	private ToolManager toolManager = ToolManager.create();
-	private SharedThreadPoolManager threadPoolManager = SharedThreadPoolManager.create();
+	private ToolManager toolManager;
+	private SharedThreadPoolManager threadPoolManager;
 		
-	private PreferencePane prefsPane = new PreferencePane();
+	private PreferencePane prefsPane;
 	private LogViewerCommand logViewerCommand;
 	private ScriptEditor scriptEditor;
 		
-	private ViewerManager viewerManager = ViewerManager.create(this);
-	private PathClassManager pathClassManager = PathClassManager.create();
-	private UpdateManager updateManager = UpdateManager.create(this);
-	private ExtensionManager extensionManager = ExtensionManager.create(this);
+	private ViewerManager viewerManager;
+	private PathClassManager pathClassManager;
+	private UpdateManager updateManager;
+	private ExtensionManager extensionManager;
 
 	private QuPathMainPaneManager mainPaneManager;
 	private UndoRedoManager undoRedoManager;
@@ -201,18 +207,18 @@ public class QuPathGUI {
 
 	private boolean isStandalone = true;
 	
-	private DragDropImportListener dragAndDrop = new DragDropImportListener(this);
+	private DragDropImportListener dragAndDrop;
 	
 	private ObjectProperty<Project<BufferedImage>> projectProperty = new SimpleObjectProperty<>();
 	private ObjectProperty<QuPathViewer> viewerProperty = new SimpleObjectProperty<>();
-	private StringBinding titleBinding = createTitleBinding();
-	
+	private StringBinding titleBinding;
+
 	private BooleanProperty readOnlyProperty = new SimpleBooleanProperty(false);
 	private BooleanProperty showAnalysisPane = new SimpleBooleanProperty(true);
 		
 	private BooleanBinding noProject = projectProperty.isNull();
 	private BooleanBinding noViewer = viewerProperty.isNull();
-	private BooleanBinding noImageData = imageDataProperty().isNull();
+	private BooleanBinding noImageData;
 	
 	private BooleanProperty pluginRunning = new SimpleBooleanProperty(false);
 	private BooleanProperty scriptRunning = new SimpleBooleanProperty(false);
@@ -231,6 +237,8 @@ public class QuPathGUI {
 	private Set<Action> actions = new LinkedHashSet<>();
 
 	private CommonActions commonActions;
+
+	private AutomateActions automateActions;
 		
 	/**
 	 * Flag to record when menus are being modified.
@@ -245,17 +253,36 @@ public class QuPathGUI {
 	 * 
 	 * @param stage a stage to use for the main QuPath window
 	 */
-	private QuPathGUI(final Stage stage, final HostServices hostServices) {
+	private QuPathGUI(final Stage stage, final HostServices hostServices, boolean showStage) {
 		super();
-		
+		logger.info("Initializing: {}", System.currentTimeMillis());
+
 		this.stage = stage;
 		this.hostServices = hostServices;
 		
 		var timeit = new Timeit().start("Starting");
+
+		// These could be initialized above, but doing it here helps with finding performance issues.
+		// Note that the order is sometimes important.
+		toolManager = ToolManager.create();
+		threadPoolManager = SharedThreadPoolManager.create();
+		imageRegionStore = ImageRegionStoreFactory.createImageRegionStore();
+		prefsPane = new PreferencePane();
+		viewerManager = ViewerManager.create(this);
+		pathClassManager = PathClassManager.create();
+		updateManager = UpdateManager.create(this);
+		extensionManager = ExtensionManager.create(this);
+		dragAndDrop = new DragDropImportListener(this);
+		noImageData = imageDataProperty().isNull();
+		titleBinding = createTitleBinding();
+
 		logViewerCommand = new LogViewerCommand(stage);
 		initializeLoggingToFile();
-		logBuildVersion();				
-		
+		logBuildVersion();
+
+		// Try to ensure that any dialogs are shown with a sensible owner
+		Dialogs.setPrimaryWindow(stage);
+
 		// Set this as the current instance
 		ensureQuPathInstanceSet();
 		
@@ -293,7 +320,9 @@ public class QuPathGUI {
 		
 		// Add listeners to set default project and image data
 		syncDefaultImageDataAndProjectForScripting();
-		tryToInstallAppQuitHandler();
+		// We can't install the quit handler during startup, since it can cause a crash on some systems
+		// due to its reliance on Desktop - so post that request for later
+		Platform.runLater(this::tryToInstallAppQuitHandler);
 		initializeLocaleChangeListeners();
 		
 		// Refresh style - needs to be applied after showing the stage
@@ -303,8 +332,10 @@ public class QuPathGUI {
 		// Remove this to only accept drag-and-drop into a viewer
 		TMACommands.installDragAndDropHandler(this);
 
-		timeit.checkpoint("Showing");
-		stage.show();
+		if (showStage) {
+			timeit.checkpoint("Showing");
+			stage.show();
+		}
 
 		// Install extensions
 		timeit.checkpoint("Adding extensions");
@@ -321,8 +352,11 @@ public class QuPathGUI {
 		
 		// Populating the scripting menu is slower, so delay it until now
 		populateScriptingMenu(getMenu(QuPathResources.getString("Menu.Automate"), false));
-		menuBar.useSystemMenuBarProperty().bindBidirectional(PathPrefs.useSystemMenubarProperty());
-		
+		SystemMenuBar.manageMainMenuBar(menuBar);
+
+		stage.setMinWidth(600);
+		stage.setMinHeight(400);
+
 		logger.debug("{}", timeit.stop());
 	}
 	
@@ -373,9 +407,18 @@ public class QuPathGUI {
 		}
 		if (stage == null)
 			stage = new Stage();
-		return new QuPathGUI(stage, hostServices);
+		return new QuPathGUI(stage, hostServices, true);
 	}
 
+	/**
+	 * Create a new QuPath instance that is not visible (i.e. its stage is not shown).
+	 * @return
+	 * @throws IllegalStateException
+	 */
+	public static QuPathGUI createHiddenInstance() throws IllegalStateException {
+		var stage = new Stage();
+		return new QuPathGUI(stage, null, false);
+	}
 
 
 	/**
@@ -600,7 +643,7 @@ public class QuPathGUI {
 	}
 	
 	private void populateMenubar() {
-		installActions(new Menus(this).getActions());
+		installActions(Menus.createAllMenuActions(this));
 		// Insert a recent projects menu
 		getMenu(QuPathResources.getString("Menu.File"), true).getItems().add(1, createRecentProjectsMenu());
 	}
@@ -699,7 +742,7 @@ public class QuPathGUI {
 			activateToolsForViewer(getViewer());
 			
 			if (n == PathTools.POINTS)
-				commonActions.COUNTING_PANEL.handle(null);
+				commonActions.SHOW_POINTS_DIALOG.handle(null);
 			
 			updateCursorForSelectedTool();			
 		});
@@ -707,6 +750,15 @@ public class QuPathGUI {
 		return mainPaneManager.getMainPane();
 	}
 
+
+	/**
+	 * Observable value indicating that the user interface is/should be blocked.
+	 * This happens when a plugin or script is running.
+	 * @return
+	 */
+	public ObservableValue<Boolean> uiBlocked() {
+		return uiBlocked;
+	}
 
 
 	private void syncDefaultImageDataAndProjectForScripting() {
@@ -759,6 +811,7 @@ public class QuPathGUI {
 		}
 		
 	}
+
 	
 	
 	private void ensureQuPathInstanceSet() {
@@ -805,10 +858,21 @@ public class QuPathGUI {
 		public void handle(KeyEvent e) {
 			if (e.getEventType() != KeyEvent.KEY_RELEASED)
 				return;
-			
+
+			// For detachable viewers, we can have events passed from the other viewer
+			// but which should be handled here
+			var target = e.getTarget();
+			boolean propagatedFromAnotherScene = false;
+			if (target instanceof Node node) {
+				if (node.getScene() != stage.getScene())
+					propagatedFromAnotherScene = true;
+			}
+
 			// It seems if using the system menubar on Mac, we can sometimes need to mop up missed keypresses
-			if (e.isConsumed() || e.isShortcutDown() || !(GeneralTools.isMac() && getMenuBar().isUseSystemMenuBar()) || e.getTarget() instanceof TextInputControl) {
-				return;
+			if (!propagatedFromAnotherScene) {
+				if (e.isConsumed() || e.isShortcutDown() || !(GeneralTools.isMac() && getMenuBar().isUseSystemMenuBar()) || e.getTarget() instanceof TextInputControl) {
+					return;
+				}
 			}
 
 			for (var entry : comboMap.entrySet()) {
@@ -1332,7 +1396,8 @@ public class QuPathGUI {
 					viewer.setImageData(imageData2);
 				}
 			} catch (IOException e) {
-				Dialogs.showErrorMessage("Read image data", e);
+				Dialogs.showErrorMessage("Read image data", "Error reading image data\n" + e.getLocalizedMessage());
+				logger.error(e.getMessage(), e);
 			}
 			
 			return true;
@@ -1394,7 +1459,10 @@ public class QuPathGUI {
 			}
 			return true;
 		} catch (Exception e) {
-			Dialogs.showErrorMessage("Load ImageData", e);
+			Dialogs.showErrorMessage("Load ImageData", "Error attempting to load image data\n" + e.getLocalizedMessage());
+			logger.error(e.getMessage(), e);
+			// If this failed
+			viewer.resetImageData();
 			return false;
 		}
 	}
@@ -1421,7 +1489,14 @@ public class QuPathGUI {
 			return true;
 		ProjectImageEntry<BufferedImage> entry = getProjectImageEntry(imageData);
 		String name = entry == null ? ServerTools.getDisplayableImageName(imageData.getServer()) : entry.getImageName();
-		var response = Dialogs.showYesNoCancelDialog("Save changes", "Save changes to " + name + "?");
+		var owner = FXUtils.getWindow(getViewer().getView());
+		var response = Dialogs.builder()
+				.title("Save changes")
+				.owner(owner)
+				.contentText("Save changes to " + name + "?")
+				.buttons(ButtonType.YES, ButtonType.NO, ButtonType.CANCEL)
+				.showAndWait()
+				.orElse(ButtonType.CANCEL);
 		if (response == ButtonType.CANCEL)
 			return false;
 		if (response == ButtonType.NO)
@@ -1444,7 +1519,8 @@ public class QuPathGUI {
 			}
 			return true;
 		} catch (IOException e) {
-			Dialogs.showErrorMessage("Save ImageData", e);
+			Dialogs.showErrorMessage("Save ImageData", "Error attempting to save image data\n" + e.getLocalizedMessage());
+			logger.error(e.getMessage(), e);
 			return false;
 		}
 	}
@@ -1463,7 +1539,8 @@ public class QuPathGUI {
 		try {
 			return openImage(getViewer(), null, true, false);
 		} catch (IOException e) {
-			Dialogs.showErrorMessage("Open image", e);
+			Dialogs.showErrorMessage("Open image", "Error opening image\n" + e.getLocalizedMessage());
+			logger.error(e.getMessage(), e);
 			return false;
 		}
 	}
@@ -1480,7 +1557,8 @@ public class QuPathGUI {
 		try {
 			return openImage(getViewer(), null, true, true);
 		} catch (IOException e) {
-			Dialogs.showErrorMessage("Open image", e);
+			Dialogs.showErrorMessage("Open image", "Error opening image\n" + e.getLocalizedMessage());
+			logger.error(e.getMessage(), e);
 			return false;
 		}
 	}
@@ -1691,7 +1769,8 @@ public class QuPathGUI {
 			try {
 				runScript(file, null);
 			} catch (ScriptException e) {
-				Dialogs.showErrorMessage("Script error", e);
+				Dialogs.showErrorMessage("Script error", e.getLocalizedMessage());
+				logger.error(e.getMessage(), e);
 			}
 		});
 	}
@@ -1710,7 +1789,8 @@ public class QuPathGUI {
 			try {
 				runScript(null, script);
 			} catch (ScriptException e) {
-				Dialogs.showErrorMessage("Script error", e);
+				Dialogs.showErrorMessage("Script error", e.getLocalizedMessage());
+				logger.error(e.getMessage(), e);
 			}
 		});
 	}
@@ -2101,15 +2181,16 @@ public class QuPathGUI {
 	 * @throws Exception
 	 */
 	public boolean runPlugin(final PathPlugin<BufferedImage> plugin, final String arg, final boolean doInteractive) throws Exception {
+		var imageData = getImageData();
 		if (doInteractive && plugin instanceof PathInteractivePlugin pluginInteractive) {
-			ParameterList params = pluginInteractive.getDefaultParameterList(getImageData());
+			ParameterList params = pluginInteractive.getDefaultParameterList(imageData);
 			// Update parameter list, if necessary
 			if (arg != null) {
 				Map<String, String> map = GeneralTools.parseArgStringValues(arg);
 				// We use the US locale because we need to ensure decimal points (not commas)
 				ParameterList.updateParameterList(params, map, Locale.US);
 			}
-			var runner = new PluginRunnerFX(this);
+			var runner = new TaskRunnerFX(this);
 			ParameterDialogWrapper<BufferedImage> dialog = new ParameterDialogWrapper<>(pluginInteractive, params, runner);
 			dialog.showDialog();
 			return !runner.isCancelled();
@@ -2117,9 +2198,9 @@ public class QuPathGUI {
 		else {
 			try {
 				pluginRunning.set(true);
-				var runner = new PluginRunnerFX(this);
+				var runner = new TaskRunnerFX(this);
 				@SuppressWarnings("unused")
-				var completed = plugin.runPlugin(runner, arg);
+				var completed = plugin.runPlugin(runner, imageData, arg);
 				return !runner.isCancelled();
 			} finally {
 				pluginRunning.set(false);
@@ -2311,11 +2392,12 @@ public class QuPathGUI {
 	 * Refresh the title bar in the main QuPath window.
 	 */
 	public void refreshTitle() {
-		if (Platform.isFxApplicationThread())
+		if (Platform.isFxApplicationThread()) {
 			titleBinding.invalidate();
-		else
+			viewerManager.refreshTitles();
+		} else
 			Platform.runLater(() -> refreshTitle());
-	}	
+	}
 		
 	private StringBinding createTitleBinding() {
 		return Bindings.createStringBinding(() -> createTitleFromCurrentImage(),
@@ -2332,8 +2414,14 @@ public class QuPathGUI {
 			return name;
 		return name + " - " + getDisplayedImageName(imageData);
 	}
-	
-	private String getDisplayedImageName(ImageData<BufferedImage> imageData) {
+
+	/**
+	 * Get the image name to display for a specified image.
+	 * This can be used to determine a name to display in the title bar, for example.
+	 * @param imageData
+	 * @return
+	 */
+	public String getDisplayedImageName(ImageData<BufferedImage> imageData) {
 		if (imageData == null)
 			return null;
 		var project = getProject();
@@ -2411,7 +2499,7 @@ public class QuPathGUI {
 			if (imageData != null) {
 				if (!checkSaveChanges(imageData))
 					return;
-				viewer.setImageData(null);
+				viewer.resetImageData();
 			}
 		}
 		
@@ -2422,7 +2510,8 @@ public class QuPathGUI {
 				if (!ProjectCommands.promptToCheckURIs(project, true))
 					return;
 			} catch (IOException e) {
-				Dialogs.showErrorMessage("Update URIs", e);
+				Dialogs.showErrorMessage("Update URIs", "Error updating URIs\n" + e.getLocalizedMessage());
+				logger.error(e.getMessage(), e);
 				return;
 			}
 		}
@@ -2527,7 +2616,7 @@ public class QuPathGUI {
 	 * 
 	 * @param dialogTitle Name to use within any displayed dialog box.
 	 * @param viewer
-	 * @return True if the viewer no longer contains an open image (either because it never did contain one, or 
+	 * @return true if the viewer no longer contains an open image (either because it never did contain one, or
 	 * the image was successfully closed), false otherwise (e.g. if the user thwarted the close request)
 	 */
 	private boolean requestToCloseViewer(final QuPathViewer viewer, final String dialogTitle) {
@@ -2538,7 +2627,7 @@ public class QuPathGUI {
 			if (!isReadOnly() && !promptToSaveChangesOrCancel(dialogTitle, imageData))
 				return false;
 		}
-		viewer.setImageData(null);
+		viewer.resetImageData();
 		return true;
 	}
 	
@@ -2582,7 +2671,8 @@ public class QuPathGUI {
 				} else
 					PathIO.writeImageData(filePrevious, imageData);
 			} catch (IOException e) {
-				Dialogs.showErrorMessage("Save ImageData", e);
+				Dialogs.showErrorMessage("Save ImageData", "Error saving image data\n" + e.getLocalizedMessage());
+				logger.error(e.getMessage(), e);
 			}
 		}
 		return true;
@@ -2590,11 +2680,12 @@ public class QuPathGUI {
 	
 	
 	/**
-	 * Show the log window associated with this QuPath instance.
+	 * Get the log viewer associated with this QuPath instance.
+	 * @return
 	 * @since v0.5.0
 	 */
-	public void showLogWindow() {
-		logViewerCommand.run();
+	public LogViewerCommand getLogViewerCommand() {
+		return logViewerCommand;
 	}
 	
 	
@@ -2736,7 +2827,7 @@ public class QuPathGUI {
 	
 	
 	/**
-	 * Get the default actions associated with this QuPath instance.
+	 * Get the common actions associated with this QuPath instance.
 	 * @return
 	 */
 	public synchronized CommonActions getCommonActions() {
@@ -2745,6 +2836,18 @@ public class QuPathGUI {
 			installActions(ActionTools.getAnnotatedActions(commonActions));
 		}
 		return commonActions;
+	}
+
+	/**
+	 * Get the automated actions associated with this QuPath instance.
+	 * @return
+	 */
+	public synchronized AutomateActions getAutomateActions() {
+		if (automateActions == null) {
+			automateActions = new AutomateActions(this);
+			installActions(ActionTools.getAnnotatedActions(automateActions));
+		}
+		return automateActions;
 	}
 	
 	
@@ -2778,7 +2881,12 @@ public class QuPathGUI {
 	
 	
 	private OverlayActions overlayActions;
-	
+
+	/**
+	 * Get the actions associated with the viewer overlay options.
+	 * This includes showing/hiding/filling objects, or adjusting opacity.
+	 * @return
+	 */
 	public OverlayActions getOverlayActions() {
 		if (overlayActions == null)
 			overlayActions = new OverlayActions(getOverlayOptions());
@@ -2786,11 +2894,72 @@ public class QuPathGUI {
 	}
 	
 	private ViewerActions viewerActions;
-	
+
+	/**
+	 * Get the associations associated with QuPath image viewers.
+	 * @return
+	 */
 	public ViewerActions getViewerActions() {
 		if (viewerActions == null)
 			viewerActions = new ViewerActions(getViewerManager());
 		return viewerActions;
 	}
-	
+
+
+	/**
+	 * Legacy methods, to be removed in future versions.
+	 */
+
+
+	/**
+	 * Create an executor using a single thread.
+	 * <p>
+	 * Optionally specify an owner, in which case the same Executor will be returned for the owner
+	 * for so long as the Executor has not been shut down; if it has been shut down, a new Executor will be returned.
+	 * <p>
+	 * Specifying an owner is a good idea if there is a chance that any submitted tasks could block,
+	 * since the same Executor will be returned for all requests that give a null owner.
+	 * <p>
+	 * The advantage of using this over creating an ExecutorService some other way is that
+	 * shutdown will be called on any pools created this way whenever QuPath is quit.
+	 *
+	 * @param owner
+	 * @return
+	 * @deprecated since v0.5.0; use {@link #getThreadPoolManager()}
+	 */
+	@Deprecated
+	public ExecutorService createSingleThreadExecutor(final Object owner) {
+		LogTools.logOnce(logger, "QuPathGUI.createSingleThreadExecutor(Object) is deprecated and will be removed; " +
+				"use QuPathGUI.getThreadPoolManager().getSingleThreadExecutor(owner) instead");
+		return getThreadPoolManager().getSingleThreadExecutor(owner);
+	}
+
+	/**
+	 * Create a completion service that uses a shared threadpool for the application.
+	 * @param <V>
+	 *
+	 * @param cls
+	 * @return
+	 * @deprecated since v0.5.0; use {@link #getThreadPoolManager()}
+	 */
+	@Deprecated
+	public <V> ExecutorCompletionService<V> createSharedPoolCompletionService(Class<V> cls) {
+		LogTools.logOnce(logger, "QuPathGUI.createSharedPoolCompletionService(Class) is deprecated and will be removed; " +
+				"use QuPathGUI.getThreadPoolManager().createSharedPoolCompletionService(Class) instead");
+		return getThreadPoolManager().createSharedPoolCompletionService(cls);
+	}
+
+	/**
+	 * Submit a short task to a shared thread pool
+	 *
+	 * @param runnable
+	 * @deprecated since v0.5.0; use {@link #getThreadPoolManager()}
+	 */
+	@Deprecated
+	public void submitShortTask(final Runnable runnable) {
+		LogTools.logOnce(logger, "QuPathGUI.submitShortTask() is deprecated and will be removed; " +
+						"use QuPathGUI.getThreadPoolManager().submitShortTask() instead");
+		getThreadPoolManager().submitShortTask(runnable);
+	}
+
 }

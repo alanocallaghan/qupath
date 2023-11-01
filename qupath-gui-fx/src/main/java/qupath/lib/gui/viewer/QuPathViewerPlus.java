@@ -4,7 +4,7 @@
  * %%
  * Copyright (C) 2014 - 2016 The Queen's University of Belfast, Northern Ireland
  * Contact: IP Management (ipmanagement@qub.ac.uk)
- * Copyright (C) 2018 - 2020 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2018 - 2023 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -46,7 +46,6 @@ import qupath.lib.gui.images.stores.DefaultImageRegionStore;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.gui.tools.CommandFinderTools;
-import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 
 /**
@@ -78,14 +77,13 @@ public class QuPathViewerPlus extends QuPathViewer {
 	
 	/**
 	 * Create a new viewer.
-	 * @param imageData image data to show within the viewer
 	 * @param regionStore store used to tile caching
 	 * @param overlayOptions overlay options to control the viewer display
 	 * @param viewerDisplayOptions viewer options to control additional panes and labels
 	 */
-	public QuPathViewerPlus(final ImageData<BufferedImage> imageData, final DefaultImageRegionStore regionStore, final OverlayOptions overlayOptions,
+	public QuPathViewerPlus(final DefaultImageRegionStore regionStore, final OverlayOptions overlayOptions,
 			final ViewerPlusDisplayOptions viewerDisplayOptions) {
-		super(imageData, regionStore, overlayOptions);
+		super(regionStore, overlayOptions);
 		
 		
 		sliderZ.setOrientation(Orientation.VERTICAL);
@@ -106,8 +104,6 @@ public class QuPathViewerPlus extends QuPathViewer {
 		});
 		
 		// Add the overview (preview image for navigation)
-		if (imageData != null)
-			overview.imageDataChanged(this, null, imageData);
 		Node overviewNode = overview.getNode();
 		basePane.getChildren().add(overviewNode);
 		AnchorPane.setTopAnchor(overviewNode, (double)padding);

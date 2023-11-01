@@ -21,31 +21,6 @@
 
 package qupath.lib.gui.tools;
 
-import java.awt.Desktop;
-import java.awt.Desktop.Action;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.Transparency;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import javax.swing.SwingUtilities;
-
-import javafx.scene.control.*;
-import org.controlsfx.control.ListSelectionView;
-import org.controlsfx.glyphfont.Glyph;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import javafx.application.Platform;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.ObservableList;
@@ -58,6 +33,21 @@ import javafx.geometry.Side;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.ColorPicker;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.Slider;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.Clipboard;
@@ -71,17 +61,23 @@ import javafx.scene.robot.Robot;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import org.controlsfx.control.ListSelectionView;
+import org.controlsfx.glyphfont.Glyph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.fx.dialogs.Dialogs;
 import qupath.fx.utils.FXUtils;
 import qupath.fx.utils.GridPaneUtils;
+import qupath.lib.awt.common.BufferedImageTools;
 import qupath.lib.color.ColorDeconvolutionHelper;
 import qupath.lib.color.ColorDeconvolutionStains;
 import qupath.lib.color.ColorDeconvolutionStains.DefaultColorDeconvolutionStains;
 import qupath.lib.color.StainVector;
 import qupath.lib.common.ColorTools;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.commands.Commands;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.dialogs.ParameterPanelFX;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.viewer.QuPathViewer;
@@ -99,6 +95,27 @@ import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import qupath.lib.roi.PointsROI;
 import qupath.lib.roi.RoiTools.CombineOp;
 import qupath.lib.roi.interfaces.ROI;
+
+import javax.swing.SwingUtilities;
+import java.awt.AWTException;
+import java.awt.Desktop;
+import java.awt.Desktop.Action;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.Transparency;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Assorted static methods to help with JavaFX and QuPath GUI-related tasks.
@@ -229,8 +246,10 @@ public class GuiTools {
 				// Browsing the directory (at least on Mac) seems to open the parent directory
 				if (desktop.isSupported(Desktop.Action.BROWSE_FILE_DIR))
 					SwingUtilities.invokeLater(() -> desktop.browseFileDirectory(file));
-				else
+				else {
 					Dialogs.showErrorNotification("Browse directory", e1);
+					logger.error(e1.getMessage(), e1);
+				}
 			}
 		}
 		return false;
@@ -490,8 +509,7 @@ public class GuiTools {
 			double height = scene.getHeight();
 			try {
 				// For reasons I do not understand, this occasionally throws an ArrayIndexOutOfBoundsException
-				return new Robot().getScreenCapture(null,
-						x, y, width, height, false);
+				return createScreenCapture(x, y, width, height, GeneralTools.isMac());
 			} catch (Exception e) {
 				logger.error("Unable to make main window screenshot, will resort to trying to crop a full screenshot instead", e);
 				var img2 = makeSnapshotFX(qupath, viewer, GuiTools.SnapshotType.FULL_SCREENSHOT);
@@ -499,14 +517,46 @@ public class GuiTools {
 						(int)x, (int)y, (int)width, (int)height);
 			}
 		case FULL_SCREENSHOT:
-			var screen = Screen.getPrimary();
+			// Make the screenshot of the screen containing QuPath, if possible
+			var screen = stage == null ? Screen.getPrimary() : FXUtils.getScreen(stage);
 			var bounds = screen.getBounds();
-			return new Robot().getScreenCapture(null,
-					bounds.getMinX(), bounds.getMinY(), bounds.getWidth(), bounds.getHeight());
+			return createScreenCapture(bounds.getMinX(), bounds.getMinY(), bounds.getWidth(), bounds.getHeight(), GeneralTools.isMac());
 		default:
 			throw new IllegalArgumentException("Unknown snapshot type " + type);
 		}
 	}
+
+
+	/**
+	 * Make a screen capture, optionally preferring AWT over JavaFX.
+	 * The reason to use AWT sometimes is that macOS (at least) can sometimes given different colors - see
+	 * https://github.com/qupath/qupath/issues/1309
+	 * <p>
+	 * @param x
+	 * @param y
+	 * @param width
+	 * @param height
+	 * @param preferAwt
+	 * @return
+	 * @implNote We make the assumption here that the screen coordinates used with JavaFX and AWT are compatible.
+	 */
+	private static WritableImage createScreenCapture(double x, double y, double width, double height, boolean preferAwt) {
+		if (preferAwt) {
+			try {
+				logger.debug("Attempting screen capture with AWT");
+				var img = new java.awt.Robot().createScreenCapture(
+						new Rectangle2D.Double(x, y, width, height).getBounds()
+				);
+				return SwingFXUtils.toFXImage(img, null);
+			} catch (AWTException e) {
+				logger.warn("Exception attempting AWT screen capture");
+				logger.debug(e.getMessage(), e);
+			}
+		}
+		return new Robot().getScreenCapture(null, x, y, width, height);
+	}
+
+
 
 	/**
 	 * Make a snapshot (image) showing what is currently displayed in a QuPath window
@@ -517,7 +567,24 @@ public class GuiTools {
 	 * @return
 	 */
 	public static BufferedImage makeSnapshot(final QuPathGUI qupath, final GuiTools.SnapshotType type) {
-		return SwingFXUtils.fromFXImage(makeSnapshotFX(qupath, qupath.getViewer(), type), null);
+		return makeSnapshot(qupath, qupath.getViewer(), type);
+	}
+
+	/**
+	 * Make a snapshot (image) showing what is currently displayed in a QuPath window
+	 * or the specified viewer, as determined by the SnapshotType.
+	 *
+	 * @param qupath
+	 * @param viewer
+	 * @param type
+	 * @return
+	 */
+	public static BufferedImage makeSnapshot(final QuPathGUI qupath, final QuPathViewer viewer, final GuiTools.SnapshotType type) {
+		var image = makeSnapshotFX(qupath, viewer, type);
+		var img = SwingFXUtils.fromFXImage(image, null);
+		// Ensuring we have ARGB improved consistency (especially when saving the image, since otherwise we can end
+		// up with 4-channel images that display strangely)
+		return BufferedImageTools.ensureBufferedImageType(img, BufferedImage.TYPE_INT_ARGB);
 	}
 	
 	/**
@@ -534,7 +601,7 @@ public class GuiTools {
 	 * @return
 	 */
 	public static BufferedImage makeSnapshot() {
-		return SwingFXUtils.fromFXImage(makeSnapshotFX(QuPathGUI.getInstance(), null, GuiTools.SnapshotType.MAIN_SCENE), null);
+		return makeSnapshot(QuPathGUI.getInstance(), GuiTools.SnapshotType.MAIN_SCENE);
 	}
 	
 	/**
@@ -542,7 +609,8 @@ public class GuiTools {
 	 * @return
 	 */
 	public static BufferedImage makeViewerSnapshot() {
-		return SwingFXUtils.fromFXImage(makeSnapshotFX(QuPathGUI.getInstance(), QuPathGUI.getInstance().getViewer(), GuiTools.SnapshotType.VIEWER), null);
+		var qupath = QuPathGUI.getInstance();
+		return makeSnapshot(qupath, qupath.getViewer(), GuiTools.SnapshotType.VIEWER);
 	}
 	
 	/**
@@ -550,7 +618,7 @@ public class GuiTools {
 	 * @return
 	 */
 	public static BufferedImage makeFullScreenshot() {
-		return SwingFXUtils.fromFXImage(makeSnapshotFX(QuPathGUI.getInstance(), null, GuiTools.SnapshotType.FULL_SCREENSHOT), null);
+		return makeSnapshot(QuPathGUI.getInstance(), GuiTools.SnapshotType.FULL_SCREENSHOT);
 	}
 
 	/**
@@ -712,6 +780,7 @@ public class GuiTools {
 				return true;
 			} catch (Exception e1) {
 				Dialogs.showErrorNotification("Open file", e1);
+				logger.error(e1.getMessage(), e1);
 			}
 		}
 		return false;
@@ -1208,7 +1277,7 @@ public class GuiTools {
 	 * @param supportedParents collection of valid parent objects
 	 * @return
 	 */
-	public static <T> boolean promptForParentObjects(final String name, final ImageData<T> imageData, final boolean includeSelected, final Collection<Class<? extends PathObject>> supportedParents) {
+	public static boolean promptForParentObjects(final String name, final ImageData<?> imageData, final boolean includeSelected, final Collection<Class<? extends PathObject>> supportedParents) {
 
 		PathObjectHierarchy hierarchy = imageData == null ? null : imageData.getHierarchy();
 		if (hierarchy == null)
@@ -1281,6 +1350,47 @@ public class GuiTools {
 
 		// Success!  Probably...
 		return !hierarchy.getSelectionModel().noSelection();
+	}
+
+
+	/**
+	 * Show a stage, while ensuring that it cannot be larger than the screen size.
+	 * The screen is determined from the stage itself, its owner, or is the primary screen.
+	 * <p>
+	 *     This method is useful when there is a risk that an initial stage size is too big for the screen,
+	 *     but we do not want to prevent the user from resizing freely afterwards.
+	 * </p>
+	 * @param stage
+	 * @param proportion
+	 * @see #showWithSizeConstraints(Stage, double, double)
+	 */
+	public static void showWithScreenSizeConstraints(Stage stage, double proportion) {
+		Screen screen = FXUtils.getScreen(stage);
+		if (screen == null && stage.getOwner() != null)
+			screen = FXUtils.getScreen(stage.getOwner());
+		if (screen == null)
+			screen = Screen.getPrimary();
+		showWithSizeConstraints(stage,
+				screen.getVisualBounds().getWidth() * proportion,
+						screen.getVisualBounds().getHeight() * proportion);
+	}
+
+	/**
+	 * Show a stage, while ensuring that it cannot be larger the maximum dimensions provided
+	 * This effectively sets the maximum dimensions of the stage, shows it, and then restores the previous maximum dimensions.
+	 * @param stage
+	 * @param maxWidth
+	 * @param maxHeight
+	 * @see #showWithScreenSizeConstraints(Stage, double)
+	 */
+	public static void showWithSizeConstraints(Stage stage, double maxWidth, double maxHeight) {
+		double previousMaxWidth = stage.getMaxWidth();
+		double previousMaxHeight = stage.getMaxHeight();
+		stage.setMaxWidth(Math.min(previousMaxWidth, maxWidth));
+		stage.setMaxHeight(Math.min(previousMaxHeight, maxHeight));
+		stage.show();
+		stage.setMaxWidth(previousMaxWidth);
+		stage.setMaxHeight(previousMaxHeight);
 	}
 
 

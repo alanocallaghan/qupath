@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import org.controlsfx.control.decoration.Decorator;
 import org.controlsfx.control.decoration.GraphicDecoration;
 import org.slf4j.Logger;
@@ -57,6 +59,7 @@ import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
 import javafx.scene.text.TextAlignment;
 import qupath.lib.gui.actions.ActionTools;
+import qupath.lib.gui.actions.AutomateActions;
 import qupath.lib.gui.actions.CommonActions;
 import qupath.lib.gui.actions.OverlayActions;
 import qupath.lib.gui.actions.ViewerActions;
@@ -91,7 +94,11 @@ class ToolBarComponent {
 
 	private ToolBar toolbar = new ToolBar();
 
-	ToolBarComponent(ToolManager toolManager, ViewerActions viewerManagerActions, CommonActions commonActions, OverlayActions overlayActions) {
+	ToolBarComponent(ToolManager toolManager,
+					 ViewerActions viewerManagerActions,
+					 CommonActions commonActions,
+					 AutomateActions automateActions,
+					 OverlayActions overlayActions) {
 		this.toolManager = toolManager;
 		this.viewerProperty = viewerManagerActions.getViewerManager().activeViewerProperty();
 
@@ -130,6 +137,7 @@ class ToolBarComponent {
 		nodes.add(new Separator(Orientation.VERTICAL));
 
 		nodes.add(ActionTools.createToggleButtonWithGraphicOnly(overlayActions.SHOW_ANNOTATIONS));
+		nodes.add(ActionTools.createToggleButtonWithGraphicOnly(overlayActions.FILL_ANNOTATIONS));
 		nodes.add(ActionTools.createToggleButtonWithGraphicOnly(overlayActions.SHOW_NAMES));
 		nodes.add(ActionTools.createToggleButtonWithGraphicOnly(overlayActions.SHOW_TMA_GRID));
 		nodes.add(ActionTools.createToggleButtonWithGraphicOnly(overlayActions.SHOW_DETECTIONS));
@@ -154,6 +162,8 @@ class ToolBarComponent {
 				);
 		nodes.add(btnMeasure);
 
+		nodes.add(ActionTools.createButtonWithGraphicOnly(automateActions.SCRIPT_EDITOR));
+
 		nodes.add(new Separator(Orientation.VERTICAL));
 
 		nodes.add(ActionTools.createToggleButtonWithGraphicOnly(viewerManagerActions.SHOW_OVERVIEW));
@@ -163,6 +173,7 @@ class ToolBarComponent {
 
 		nodes.add(new Separator(Orientation.VERTICAL));
 		nodes.add(ActionTools.createButtonWithGraphicOnly(commonActions.PREFERENCES));
+		nodes.add(ActionTools.createButtonWithGraphicOnly(commonActions.SHOW_LOG));
 		nodes.add(ActionTools.createButtonWithGraphicOnly(commonActions.HELP_VIEWER));
 
 		toolbar.getItems().setAll(nodes);
