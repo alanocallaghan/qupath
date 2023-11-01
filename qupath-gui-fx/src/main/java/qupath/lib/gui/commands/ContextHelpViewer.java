@@ -27,6 +27,7 @@ import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.binding.LongBinding;
 import javafx.beans.binding.ObjectExpression;
+import javafx.beans.binding.SetBinding;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -240,11 +241,13 @@ public class ContextHelpViewer {
 				createDetectionsHiddenEntry(),
 				createPixelClassificationOverlayHiddenEntry(),
 				createTMAGridHiddenEntry(),
+				createHiddenClassificationsEntry(),
 				createNoImageEntry(),
 				createNoProjectEntry(),
 				createOpacityZeroEntry(),
 				createGammaNotDefault(),
-				createInvertedColors()
+				createInvertedColors(),
+				createNoChannelsVisible()
 				);
 	}
 
@@ -525,6 +528,13 @@ public class ContextHelpViewer {
 				qupath.getOverlayOptions().showTMAGridProperty().not());
 		return entry;
 	}
+
+	private HelpListEntry createHiddenClassificationsEntry() {
+		var entry = HelpListEntry.createWarning(
+				"ContextHelp.warning.classificationsHidden");
+		entry.visibleProperty().bind(Bindings.isEmpty(qupath.getOverlayOptions().hiddenClassesProperty()).not());
+		return entry;
+	}
 	
 	private HelpListEntry createDetectionsHiddenEntry() {
 		var entry = HelpListEntry.createInfo(
@@ -583,6 +593,20 @@ public class ContextHelpViewer {
 				qupath.viewerProperty()
 						.map(QuPathViewer::getImageDisplay)
 						.flatMap(ImageDisplay::useInvertedBackgroundProperty));
+		return entry;
+	}
+
+	private HelpListEntry createNoChannelsVisible() {
+		var entry = HelpListEntry.createWarning(
+				"ContextHelp.warning.noChannels",
+				createIcon(PathIcons.CONTRAST));
+		var emptyChannels = qupath.viewerProperty()
+				.map(QuPathViewer::getImageDisplay)
+				.map(ImageDisplay::selectedChannels)
+				.flatMap(Bindings::isEmpty);
+		entry.visibleProperty().bind(qupath.imageDataProperty().isNotNull().and(Bindings.createBooleanBinding(
+				() -> emptyChannels == null || emptyChannels.getValue() == null ? false : emptyChannels.getValue(), emptyChannels
+		)));
 		return entry;
 	}
 

@@ -250,7 +250,8 @@ public class PathObjectPainter {
 
 		// Always paint selected objects, otherwise check if the object should be hidden
 		if (!isSelected) {
-			if (overlayOptions.isPathClassHidden(pathObject.getPathClass()) || isHiddenObjectType(pathObject, overlayOptions))
+			if ((overlayOptions.isPathClassHidden(pathObject.getPathClass()) && !pathObject.isTMACore())
+					|| isHiddenObjectType(pathObject, overlayOptions))
 				return false;
 		}
 
@@ -816,12 +817,12 @@ public class PathObjectPainter {
 
 		private void ensureCacheExists() {
 			if (cache == null) {
-				cache = new LinkedHashMap<>() {
+				cache = Collections.synchronizedMap(new LinkedHashMap<>() {
 					@Override
 					protected boolean removeEldestEntry(Map.Entry<Rectangle, Area> eldest) {
 						return size() > 200;
 					}
-				};
+				});
 			}
 		}
 
@@ -832,9 +833,13 @@ public class PathObjectPainter {
 				return mainArea;
 			// Try to find a cached area that contains the clip
 			ensureCacheExists();
-			for (var entry : cache.entrySet()) {
-				if (entry.getKey().contains(clip))
-					return entry.getValue();
+			if (!cache.isEmpty()) {
+				synchronized (cache) {
+					for (var entry : cache.entrySet()) {
+						if (entry.getKey().contains(clip))
+							return entry.getValue();
+					}
+				}
 			}
 			// Create a crop, if needed
 			var padded = createPaddedRectangle(clip, clip.width+1, clip.height+1);
