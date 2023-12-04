@@ -389,8 +389,8 @@ public class ObjectClassifierCommand implements Runnable {
 		 * @param training
 		 * @return
 		 */
-		private static List<PathObject> getTrainingAnnotations(PathObjectHierarchy hierarchy, TrainingAnnotations training) {
-			Predicate<PathObject> trainingFilter = (PathObject p) -> p.isAnnotation() && p.getPathClass() != null && p.hasROI();
+		private static List<PathObject> getTrainingPathObjects(PathObjectHierarchy hierarchy, TrainingAnnotations training) {
+			Predicate<PathObject> trainingFilter = (PathObject p) -> p.getPathClass() != null && p.hasROI();
 			switch (training) {
 			case AREAS:
 				trainingFilter = trainingFilter.and(PathObjectFilter.ROI_AREA);
@@ -404,7 +404,7 @@ public class ObjectClassifierCommand implements Runnable {
 			default:
 				break;
 			}
-			var annotations = hierarchy.getAnnotationObjects();
+			var annotations = hierarchy.getAllObjects(false);
 			return annotations
 					.stream()
 					.filter(trainingFilter)
@@ -588,16 +588,16 @@ public class ObjectClassifierCommand implements Runnable {
 		 * @param trainingImageData
 		 * @return a collection of classified annotations suitable for training
 		 */
-		private Collection<PathObject> getTrainingAnnotations(Collection<ImageData<BufferedImage>> trainingImageData) {
+		private Collection<PathObject> getTrainingPathObjects(Collection<ImageData<BufferedImage>> trainingImageData) {
 			if (trainingImageData.isEmpty())
 				return Collections.emptyList();
 			var annotationType = this.trainingAnnotations.get();
 			if (trainingImageData.size() == 1)
-				return getTrainingAnnotations(trainingImageData.iterator().next().getHierarchy(), annotationType);
+				return getTrainingPathObjects(trainingImageData.iterator().next().getHierarchy(), annotationType);
 			
 			var trainingAnnotations = new ArrayList<PathObject>();
 			for (var imageData : trainingImageData) {
-				trainingAnnotations.addAll(getTrainingAnnotations(imageData.getHierarchy(), annotationType));
+				trainingAnnotations.addAll(getTrainingPathObjects(imageData.getHierarchy(), annotationType));
 			}
 			return trainingAnnotations;
 		}
@@ -659,23 +659,23 @@ public class ObjectClassifierCommand implements Runnable {
 
 			// Get all the available measurements
 			var allMeasurements = getAllMeasurements(trainingImageData, true);
-			
+
+			if (trainingFeatures.get() != TrainingFeatures.FILTERED)
+				return new ArrayList<>(allMeasurements);
+
 			// Filter out the irrelevant measurements, if needed
-			if (trainingFeatures.get() == TrainingFeatures.FILTERED) {
-				var trainingAnnotations = getTrainingAnnotations(trainingImageData);
-				var measurements = new ArrayList<String>();
-				var filterText = trainingAnnotations.stream().distinct().map(a -> a.getPathClass().toString().toLowerCase().trim()).collect(Collectors.toSet());
-				for (var m : allMeasurements) {
-					for (var f : filterText) {
-						if (m.toLowerCase().contains(f)) {
-							measurements.add(m);
-							break;
-						}
+			var trainingAnnotations = getTrainingPathObjects(trainingImageData);
+			var measurements = new ArrayList<String>();
+			var filterText = trainingAnnotations.stream().distinct().map(a -> a.getPathClass().toString().toLowerCase().trim()).collect(Collectors.toSet());
+			for (var m : allMeasurements) {
+				for (var f : filterText) {
+					if (m.toLowerCase().contains(f)) {
+						measurements.add(m);
+						break;
 					}
 				}
-				return measurements;
-			} else
-				return new ArrayList<>(allMeasurements);
+			}
+			return measurements;
 		}
 
 
@@ -698,29 +698,29 @@ public class ObjectClassifierCommand implements Runnable {
 
 			// Get training annotations & associated objects
 			var hierarchy = imageData.getHierarchy();
-			var trainingAnnotations = getTrainingAnnotations(hierarchy, training);
+			var trainingPathObjects = getTrainingPathObjects(hierarchy, training);
 
 			if (Thread.interrupted())
 				return null;
 
 			// Use a set for detections because we might need to check if we have the same detection for multiple classes
 			var filterNegated = filter.negate();
-			for (var annotation : trainingAnnotations) {
-				var pathClass = annotation.getPathClass();
+			for (var pathObject : trainingPathObjects) {
+				var pathClass = pathObject.getPathClass();
 				if (selectedClasses == null || selectedClasses.contains(pathClass)) {
 					// Use a TreeSet ordered by ID
 					// This is to overcome https://github.com/qupath/qupath/issues/1016
 					var set = map.computeIfAbsent(pathClass, p -> new TreeSet<>(Comparator.comparing(PathObject::getID)));
-					var roi = annotation.getROI();
+					var roi = pathObject.getROI();
 					if (roi.isPoint()) {
-						for (Point2 p : annotation.getROI().getAllPoints()) {
+						for (Point2 p : pathObject.getROI().getAllPoints()) {
 							var pathObjectsTemp = PathObjectTools.getObjectsForLocation(
 									hierarchy, p.getX(), p.getY(), roi.getZ(), roi.getT(), -1);
 							pathObjectsTemp.removeIf(filterNegated);
 							set.addAll(pathObjectsTemp);
 						}
 					} else {
-						var pathObjectsTemp = hierarchy.getObjectsForROI(PathDetectionObject.class, annotation.getROI());
+						var pathObjectsTemp = hierarchy.getObjectsForROI(PathDetectionObject.class, pathObject.getROI());
 						pathObjectsTemp.removeIf(filterNegated);
 						set.addAll(pathObjectsTemp);
 					}
@@ -1413,7 +1413,7 @@ public class ObjectClassifierCommand implements Runnable {
 		}
 
 		boolean promptToSelectClasses() {
-			var annotations = getTrainingAnnotations(getTrainingImageData());
+			var annotations = getTrainingPathObjects(getTrainingImageData());
 			if (annotations.isEmpty()) {
 				Dialogs.showErrorMessage("Object classifier", "No annotations found for training!");
 				return false;
