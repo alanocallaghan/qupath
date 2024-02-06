@@ -21,6 +21,8 @@
             type: pkg
           - platform: windows-latest
             type: msi
+          - platform: macos-14
+            type: pkg
     container: ${{ matrix.container }}
     runs-on: ${{ matrix.platform }}
     steps:
