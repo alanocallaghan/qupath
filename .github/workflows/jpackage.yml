@@ -3,7 +3,7 @@
 
  name: Build packages with jpackage
 
- on: push
+ on: workflow_dispatch
 
  jobs:
    build:
@@ -43,7 +43,7 @@
     - name: Validate Gradle wrapper
       uses: gradle/wrapper-validation-action@v2
 
-    - name: Build with Gradle (Win/Mac/Linux deb)
+    - name: Build with Gradle
       if: matrix.container == ''
       uses: gradle/gradle-build-action@v3
       with:
@@ -93,10 +93,6 @@
          with:
            merge-multiple: true
            pattern: QuPath*
-
-       - name: Debug
-         shell: bash
-         run: ls -lah
 
        - name: Wrangle files
          shell: bash
