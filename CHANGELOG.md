@@ -1,3 +1,27 @@
+## Version 0.5.1
+
+This is a *minor release* that aims to be fully compatible with v0.5.0, while fixing several bugs.
+
+### Bugs fixed
+* Brightness/Contrast histogram doesn't always update when switching between similar images (https://github.com/qupath/qupath/issues/1459)
+* Jet measurement maps show everything as black when inverted (https://github.com/qupath/qupath/issues/1470)
+* TMA and annotation grid views throw exception if the width is too small (https://github.com/qupath/qupath/issues/1473)
+* Extensions can't be loaded from sub-directories of the extension directory (https://github.com/qupath/qupath/pull/1461)
+* OpenSlide is not available when running from command line (https://github.com/qupath/qupath/pull/1447)
+* `convert-ome` always returns 0 even if it fails (https://github.com/qupath/qupath/issues/1451)
+* Grid views don't show objects by default if no measurements are available (https://github.com/qupath/qupath/issues/1472)
+* Reducing the number of open viewers can break QuPath & require it to be restarted (https://github.com/qupath/qupath/issues/1469)
+* Exception when opening script if the last directory isn't available (https://github.com/qupath/qupath/issues/1441)
+* 'Show grayscale' sometimes show an extra channel when multiple viewers are used (https://github.com/qupath/qupath/issues/1468)
+* Displaying large numbers of thumbnails in a project is too slow (https://github.com/qupath/qupath/issues/1446)
+
+### Enhancement
+* Add keyboard shortcuts to tooltips (https://github.com/qupath/qupath/issues/1450)
+
+### Dependency update
+* qupath-fxtras 0.1.4
+
+
 ## Version 0.5.0
 
 This is a **major update**, with many enhancements and new features.
