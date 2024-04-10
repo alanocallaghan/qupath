@@ -8,10 +8,10 @@ plugins {
 
 repositories {
 
-    if (findProperty("use-maven-local")) {
-        logger.warn("Using Maven local")
+//    if (findProperty("use-maven-local")) {
+//        logger.warn("Using Maven local")
         mavenLocal()
-    }
+//    }
 
     mavenCentral()
 

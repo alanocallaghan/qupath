@@ -23,6 +23,123 @@
 
 package qupath.lib.gui;
 
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
+import javafx.application.Application;
+import javafx.application.HostServices;
+import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
+import javafx.beans.binding.StringBinding;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
+import javafx.collections.ListChangeListener.Change;
+import javafx.collections.ObservableList;
+import javafx.embed.swing.JFXPanel;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.Cursor;
+import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
+import javafx.scene.control.TextInputControl;
+import javafx.scene.control.ToolBar;
+import javafx.scene.image.Image;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.Pane;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
+import javafx.stage.Window;
+import javafx.stage.WindowEvent;
+import org.controlsfx.control.action.Action;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.fx.controls.InputDisplay;
+import qupath.fx.dialogs.Dialogs;
+import qupath.fx.dialogs.FileChoosers;
+import qupath.fx.utils.FXUtils;
+import qupath.lib.common.GeneralTools;
+import qupath.lib.common.LogTools;
+import qupath.lib.common.Timeit;
+import qupath.lib.common.Version;
+import qupath.lib.gui.actions.ActionTools;
+import qupath.lib.gui.actions.AutomateActions;
+import qupath.lib.gui.actions.CommonActions;
+import qupath.lib.gui.actions.OverlayActions;
+import qupath.lib.gui.actions.ViewerActions;
+import qupath.lib.gui.actions.menus.Menus;
+import qupath.lib.gui.commands.LogViewerCommand;
+import qupath.lib.gui.commands.ProjectCommands;
+import qupath.lib.gui.commands.TMACommands;
+import qupath.lib.gui.images.stores.DefaultImageRegionStore;
+import qupath.lib.gui.images.stores.ImageRegionStoreFactory;
+import qupath.lib.gui.localization.QuPathResources;
+import qupath.lib.gui.logging.LogManager;
+import qupath.lib.gui.panes.ImageDetailsPane;
+import qupath.lib.gui.panes.PreferencePane;
+import qupath.lib.gui.panes.ServerSelector;
+import qupath.lib.gui.prefs.PathPrefs;
+import qupath.lib.gui.prefs.PathPrefs.ImageTypeSetting;
+import qupath.lib.gui.prefs.QuPathStyleManager;
+import qupath.lib.gui.prefs.SystemMenuBar;
+import qupath.lib.gui.scripting.DefaultScriptEditor;
+import qupath.lib.gui.scripting.QPEx;
+import qupath.lib.gui.scripting.ScriptEditor;
+import qupath.lib.gui.scripting.languages.GroovyLanguage;
+import qupath.lib.gui.scripting.languages.ScriptLanguageProvider;
+import qupath.lib.gui.tools.GuiTools;
+import qupath.lib.gui.tools.MenuTools;
+import qupath.lib.gui.viewer.DragDropImportListener;
+import qupath.lib.gui.viewer.OverlayOptions;
+import qupath.lib.gui.viewer.QuPathViewer;
+import qupath.lib.gui.viewer.ViewerManager;
+import qupath.lib.gui.viewer.tools.PathTool;
+import qupath.lib.gui.viewer.tools.PathTools;
+import qupath.lib.images.ImageData;
+import qupath.lib.images.ImageData.ImageType;
+import qupath.lib.images.servers.ImageServer;
+import qupath.lib.images.servers.ImageServerBuilder.ServerBuilder;
+import qupath.lib.images.servers.ImageServerBuilder.UriImageSupport;
+import qupath.lib.images.servers.ImageServerProvider;
+import qupath.lib.images.servers.ImageServers;
+import qupath.lib.images.servers.ServerTools;
+import qupath.lib.io.PathIO;
+import qupath.lib.objects.classes.PathClass;
+import qupath.lib.plugins.PathInteractivePlugin;
+import qupath.lib.plugins.PathPlugin;
+import qupath.lib.plugins.parameters.ParameterList;
+import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectIO;
+import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.projects.Projects;
+import qupath.lib.scripting.QP;
+import qupath.lib.scripting.ScriptParameters;
+import qupath.lib.scripting.languages.ExecutableLanguage;
+import qupath.lib.scripting.languages.ScriptLanguage;
+
+import javax.imageio.ImageIO;
+import javax.script.ScriptException;
+import javax.swing.SwingUtilities;
 import java.awt.Desktop;
 import java.awt.desktop.QuitEvent;
 import java.awt.desktop.QuitHandler;
@@ -49,121 +166,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
-
-import javax.imageio.ImageIO;
-import javax.script.ScriptException;
-import javax.swing.SwingUtilities;
-
-import javafx.beans.value.ObservableValue;
-import javafx.scene.Node;
-import javafx.scene.control.*;
-import javafx.stage.Window;
-import org.controlsfx.control.action.Action;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
-
-import javafx.application.Application;
-import javafx.application.HostServices;
-import javafx.application.Platform;
-import javafx.beans.binding.Bindings;
-import javafx.beans.binding.BooleanBinding;
-import javafx.beans.binding.StringBinding;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.ReadOnlyBooleanProperty;
-import javafx.beans.property.ReadOnlyObjectProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ChangeListener;
-import javafx.collections.ListChangeListener.Change;
-import javafx.collections.ObservableList;
-import javafx.embed.swing.JFXPanel;
-import javafx.event.ActionEvent;
-import javafx.event.EventHandler;
-import javafx.geometry.Rectangle2D;
-import javafx.scene.Cursor;
-import javafx.scene.Parent;
-import javafx.scene.Scene;
-import javafx.scene.image.Image;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyCodeCombination;
-import javafx.scene.input.KeyCombination;
-import javafx.scene.input.KeyEvent;
-import javafx.scene.input.MouseEvent;
-import javafx.scene.input.MouseButton;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.Pane;
-import javafx.stage.Screen;
-import javafx.stage.Stage;
-import javafx.stage.WindowEvent;
-import qupath.fx.utils.FXUtils;
-import qupath.fx.dialogs.FileChoosers;
-import qupath.lib.common.GeneralTools;
-import qupath.lib.common.LogTools;
-import qupath.lib.common.Timeit;
-import qupath.lib.common.Version;
-import qupath.lib.gui.actions.ActionTools;
-import qupath.lib.gui.actions.AutomateActions;
-import qupath.lib.gui.actions.CommonActions;
-import qupath.lib.gui.actions.OverlayActions;
-import qupath.lib.gui.actions.ViewerActions;
-import qupath.lib.gui.actions.menus.Menus;
-import qupath.fx.controls.InputDisplay;
-import qupath.lib.gui.commands.LogViewerCommand;
-import qupath.lib.gui.commands.ProjectCommands;
-import qupath.lib.gui.commands.TMACommands;
-import qupath.fx.dialogs.Dialogs;
-import qupath.lib.gui.images.stores.DefaultImageRegionStore;
-import qupath.lib.gui.images.stores.ImageRegionStoreFactory;
-import qupath.lib.gui.localization.QuPathResources;
-import qupath.lib.gui.logging.LogManager;
-import qupath.lib.gui.panes.ImageDetailsPane;
-import qupath.lib.gui.panes.PreferencePane;
-import qupath.lib.gui.panes.ServerSelector;
-import qupath.lib.gui.prefs.PathPrefs;
-import qupath.lib.gui.prefs.PathPrefs.ImageTypeSetting;
-import qupath.lib.gui.prefs.QuPathStyleManager;
-import qupath.lib.gui.prefs.SystemMenuBar;
-import qupath.lib.gui.scripting.ScriptEditor;
-import qupath.lib.gui.scripting.languages.GroovyLanguage;
-import qupath.lib.gui.scripting.languages.ScriptLanguageProvider;
-import qupath.lib.gui.tools.GuiTools;
-import qupath.lib.gui.tools.MenuTools;
-import qupath.lib.gui.viewer.DragDropImportListener;
-import qupath.lib.gui.viewer.ViewerManager;
-import qupath.lib.gui.viewer.OverlayOptions;
-import qupath.lib.gui.viewer.QuPathViewer;
-import qupath.lib.gui.viewer.tools.PathTool;
-import qupath.lib.gui.viewer.tools.PathTools;
-import qupath.lib.images.ImageData;
-import qupath.lib.images.ImageData.ImageType;
-import qupath.lib.images.servers.ImageServer;
-import qupath.lib.images.servers.ImageServerBuilder.ServerBuilder;
-import qupath.lib.images.servers.ImageServerBuilder.UriImageSupport;
-import qupath.lib.images.servers.ImageServerProvider;
-import qupath.lib.images.servers.ImageServers;
-import qupath.lib.images.servers.ServerTools;
-import qupath.lib.io.PathIO;
-import qupath.lib.objects.classes.PathClass;
-import qupath.lib.plugins.PathInteractivePlugin;
-import qupath.lib.plugins.PathPlugin;
-import qupath.lib.plugins.parameters.ParameterList;
-import qupath.lib.projects.Project;
-import qupath.lib.projects.ProjectIO;
-import qupath.lib.projects.ProjectImageEntry;
-import qupath.lib.projects.Projects;
-import qupath.lib.scripting.QP;
-import qupath.lib.scripting.ScriptParameters;
-import qupath.lib.scripting.languages.ExecutableLanguage;
-import qupath.lib.scripting.languages.ScriptLanguage;
-import qupath.lib.gui.scripting.DefaultScriptEditor;
-import qupath.lib.gui.scripting.QPEx;
 
 
 /**
@@ -693,15 +699,25 @@ public class QuPathGUI {
 	
 	private void populateScriptingMenu(Menu menuScripting) {
 		Objects.requireNonNull(menuScripting);
-		ScriptEditor editor = getScriptEditor();
-		var sharedScriptMenuLoader = new ScriptMenuLoader("Shared scripts...", PathPrefs.scriptsPathProperty(), editor);
-		
+		Callable<ScriptEditor> editorCallable = () -> QuPathGUI.getInstance().getScriptEditor();
+		ScriptMenuLoader sharedScriptMenuLoader = null;
+		try {
+			sharedScriptMenuLoader = new ScriptMenuLoader("Shared scripts...", PathPrefs.scriptsPathProperty(), editorCallable);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
 		StringBinding projectScriptsPath = Bindings.createStringBinding(() -> {
 			var project = getProject();
 			File dir = project == null ? null : Projects.getBaseDirectory(project);
 			return dir == null ? null : new File(dir, "scripts").getAbsolutePath();
 		}, projectProperty);
-		var projectScriptMenuLoader = new ScriptMenuLoader("Project scripts...", projectScriptsPath, editor);
+		ScriptMenuLoader projectScriptMenuLoader = null;
+		try {
+			projectScriptMenuLoader = new ScriptMenuLoader("Project scripts...", projectScriptsPath, editorCallable);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 		projectScriptMenuLoader.getMenu().visibleProperty().bind(
 				projectProperty.isNotNull().and(menuVisibilityManager.ignorePredicateProperty().not())
 				);
@@ -711,8 +727,13 @@ public class QuPathGUI {
 			Path path = scriptDirectoryProperty.get();
 			return path == null ? null : path.toString();
 		}, scriptDirectoryProperty);
-		ScriptMenuLoader userScriptMenuLoader = new ScriptMenuLoader("User scripts...", userScriptsPath, editor);
-	
+		ScriptMenuLoader userScriptMenuLoader = null;
+		try {
+			userScriptMenuLoader = new ScriptMenuLoader("User scripts...", userScriptsPath, editorCallable);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
 		MenuTools.addMenuItems(
 				menuScripting,
 				null,
