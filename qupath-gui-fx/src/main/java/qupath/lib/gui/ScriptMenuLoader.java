@@ -23,22 +23,6 @@
 
 package qupath.lib.gui;
 
-import javafx.beans.binding.Bindings;
-import javafx.beans.property.StringProperty;
-import javafx.beans.value.ObservableStringValue;
-import javafx.scene.control.Menu;
-import javafx.scene.control.MenuItem;
-import javafx.scene.control.SeparatorMenuItem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import qupath.fx.dialogs.Dialogs;
-import qupath.fx.dialogs.FileChoosers;
-import qupath.lib.gui.actions.ActionTools;
-import qupath.lib.gui.scripting.ScriptEditor;
-import qupath.lib.gui.tools.GuiTools;
-import qupath.lib.gui.tools.MenuTools;
-
-import javax.script.ScriptException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,7 +30,23 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
+import javax.script.ScriptException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.StringProperty;
+import javafx.beans.value.ObservableStringValue;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
+import qupath.fx.dialogs.FileChoosers;
+import qupath.lib.gui.actions.ActionTools;
+import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.scripting.ScriptEditor;
+import qupath.lib.gui.tools.GuiTools;
+import qupath.lib.gui.tools.MenuTools;
 
 /**
  * Helper class for creating a dynamic menu to a directory containing scripts.
@@ -139,10 +139,6 @@ class ScriptMenuLoader {
 		
 		menu.getItems().setAll(miPlaceholder);
 		menu.setOnMenuValidation(e -> updateMenu());
-	}
-
-	ScriptMenuLoader(final String name, final ObservableStringValue scriptDirectory, final Callable<ScriptEditor> editorFun) throws Exception {
-		this(name, scriptDirectory, editorFun.call());
 	}
 	
 	/**
