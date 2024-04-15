@@ -35,6 +35,7 @@ import org.apache.commons.text.WordUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.fx.dialogs.Dialogs;
+import qupath.fx.utils.FXUtils;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.common.Version;
 import qupath.lib.gui.actions.ActionTools;
@@ -78,7 +79,6 @@ public class ExtensionControlPane extends VBox {
     @FXML
     private ListView<QuPathExtension> extensionListView;
 
-
     @FXML
     private Button rmBtn;
     @FXML
@@ -87,7 +87,6 @@ public class ExtensionControlPane extends VBox {
     private Button submitBtn;
     @FXML
     private Button openExtensionDirBtn;
-
     @FXML
     private Button updateBtn;
     @FXML
@@ -130,11 +129,14 @@ public class ExtensionControlPane extends VBox {
         ExtensionManager extensionManager = QuPathGUI.getInstance().getExtensionManager();
         extensionManager.getLoadedExtensions().addListener(this::handleExtensionMapChange);
         extensionManager.getFailedExtensions().addListener(this::handleExtensionMapChange);
+
         openExtensionDirBtn.disableProperty().bind(
                 UserDirectoryManager.getInstance().userDirectoryProperty().isNull());
         downloadBtn.disableProperty().bind(
             repoTextArea.textProperty().isEmpty().or(ownerTextArea.textProperty().isEmpty()));
+
         downloadBtn.setGraphic(IconFactory.createNode(12, 12, IconFactory.PathIcons.DOWNLOAD));
+
         // By default, add failed extensions at the end of the list
         extensionListView.getItems().addAll(
                 extensionManager.getLoadedExtensions().values()
@@ -147,7 +149,6 @@ public class ExtensionControlPane extends VBox {
                         .sorted(Comparator.comparing(QuPathExtension::getName))
                         .toList());
         extensionListView.setCellFactory(listView -> new ExtensionListCell(extensionManager, listView));
-
 
         ownerTextArea.addEventHandler(KeyEvent.KEY_RELEASED, e -> {
             if (e.getCode() == KeyCode.ENTER) {
@@ -210,6 +211,7 @@ public class ExtensionControlPane extends VBox {
         try {
             askToDownload(repo);
         } catch (IOException | URISyntaxException | InterruptedException e) {
+            logger.error("Unable to download extension", e);
             Dialogs.showErrorNotification(QuPathResources.getString("ExtensionControlPane"),
                     QuPathResources.getString("ExtensionControlPane.unableToDownload"));
         }
@@ -242,6 +244,14 @@ public class ExtensionControlPane extends VBox {
             if (dirUser == null)
                 return null;
             dir = ExtensionClassLoader.getInstance().getExtensionsDirectory();
+            if (!Files.exists(dir)) {
+                try {
+                    logger.info("Creating extension directory: {}", dir);
+                    Files.createDirectory(dir);
+                } catch (IOException e) {
+                    logger.error("Unable to create extension directory");
+                }
+            }
         }
         return dir;
     }
@@ -300,14 +310,29 @@ public class ExtensionControlPane extends VBox {
             var file = new File(url.toURI().getPath());
             if (file.exists()) {
                 logger.info("Removing extension: {}", url);
-                GeneralTools.deleteFile(new File(url.toURI().getPath()), true);
-                Dialogs.showInfoNotification(
-                        QuPathResources.getString("ExtensionControlPane"),
-                        String.format(QuPathResources.getString("ExtensionControlPane.extensionRemoved"), url));
+                if (!GeneralTools.deleteFile(new File(url.toURI().getPath()), true)) {
+                    try {
+                        logger.warn("Closing extension classloader - will need to restart QuPath to add new extensions");
+                        ExtensionClassLoader.getInstance().close();
+                    } catch (Exception e) {
+                        logger.error("Error closing extension classloader: " + e.getMessage(), e);
+                    }
+                    if (GeneralTools.deleteFile(new File(url.toURI().getPath()), true)) {
+                        Dialogs.showInfoNotification(
+                                QuPathResources.getString("ExtensionControlPane"),
+                                String.format(QuPathResources.getString("ExtensionControlPane.extensionRemoved"), url));
+                    } else {
+                        if (Dialogs.showYesNoDialog(QuPathResources.getString("ExtensionControlPane"),
+                                QuPathResources.getString("ExtensionControlPane.unableToDeletePrompt"))) {
+                            GuiTools.browseDirectory(file);
+                        }
+                        return;
+                    }
+                }
             } else {
                 Dialogs.showWarningNotification(
                         QuPathResources.getString("ExtensionControlPane"),
-                        String.format(QuPathResources.getString("ExtensionControlPane.unableToDelete"), url));
+                        QuPathResources.getString("ExtensionControlPane.unableToFind"));
             }
             var manager = QuPathGUI.getInstance().getExtensionManager();
             manager.getLoadedExtensions().entrySet().removeIf(entry -> entry.getValue().equals(extension));
@@ -456,11 +481,10 @@ public class ExtensionControlPane extends VBox {
                 descriptionText.setText(WordUtils.wrap(extension.getDescription(), 80));
                 // core and non-core extensions have different classloaders;
                 // can't remove or update core ones
-                if (!extension.getClass().getClassLoader().getClass().equals(ExtensionClassLoader.class)) {
-                    rmBtn.setDisable(true);
-                    updateBtn.setDisable(true);
-                    gitHubBtn.setDisable(true);
-                }
+                boolean disableButtons = !extension.getClass().getClassLoader().getClass().equals(ExtensionClassLoader.class);
+                rmBtn.setDisable(disableButtons);
+                updateBtn.setDisable(disableButtons);
+                gitHubBtn.setDisable(disableButtons);
                 // if we don't have GitHub information, we can't update
                 // but we can remove
                 if (!(extension instanceof GitHubProject)) {

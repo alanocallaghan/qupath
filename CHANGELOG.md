@@ -1,6 +1,50 @@
-## Version 0.5.0-SNAPSHOT
+## Version 0.6.0-SNAPSHOT
 
-This is a work-in-progress for the next QuPath release.
+This is a *work in progress* for the next major release.
+
+### Bugs fixed
+* Tile export to .ome.tif can convert to 8-bit unnecessarily (https://github.com/qupath/qupath/issues/1494)
+
+### Dependency updates
+* Bio-Formats 7.2.0
+* Commonmark 0.22.0
+* DeepJavaLibrary 0.27.0
+* Groovy 4.0.21
+* Guava 33.1.0-jre
+* JavaFX 22
+* JNA 5.14.0
+* OpenCV 4.9.0
+* OpenJDK 21
+* slf4j 2.0.12
+
+
+## Version 0.5.1
+
+This is a *minor release* that aims to be fully compatible with v0.5.0, while fixing several bugs.
+
+### Bugs fixed
+* Brightness/Contrast histogram doesn't always update when switching between similar images (https://github.com/qupath/qupath/issues/1459)
+* Jet measurement maps show everything as black when inverted (https://github.com/qupath/qupath/issues/1470)
+* TMA and annotation grid views throw exception if the width is too small (https://github.com/qupath/qupath/issues/1473)
+* Extensions can't be loaded from sub-directories of the extension directory (https://github.com/qupath/qupath/pull/1461)
+* OpenSlide is not available when running from command line (https://github.com/qupath/qupath/pull/1447)
+* `convert-ome` always returns 0 even if it fails (https://github.com/qupath/qupath/issues/1451)
+* Grid views don't show objects by default if no measurements are available (https://github.com/qupath/qupath/issues/1472)
+* Reducing the number of open viewers can break QuPath & require it to be restarted (https://github.com/qupath/qupath/issues/1469)
+* Exception when opening script if the last directory isn't available (https://github.com/qupath/qupath/issues/1441)
+* 'Show grayscale' sometimes show an extra channel when multiple viewers are used (https://github.com/qupath/qupath/issues/1468)
+* Displaying large numbers of thumbnails in a project is too slow (https://github.com/qupath/qupath/issues/1446)
+
+### Enhancement
+* Add keyboard shortcuts to tooltips (https://github.com/qupath/qupath/issues/1450)
+
+### Dependency update
+* qupath-fxtras 0.1.4
+
+
+## Version 0.5.0
+
+This is a **major update**, with many enhancements and new features.
 
 > **Important!** Some older extensions will need to be updated to work with QuPath v0.5.
 
@@ -32,6 +76,8 @@ This is a work-in-progress for the next QuPath release.
 * New extension manager to add, remove & update extensions
 * New toolbar buttons for the script editor `</>`, log viewer, fill/unfill annotations
 * *File → Export snapshots* supports PNG, JPEG and TIFF (not just PNG)
+* New option to set the font size in the script editor
+  * *View → Set font size*
 * Support sorting project entries by name, ID, and URI
   * Right-click on the project list to access the *Sort by...* menu
 * Improved script editor auto-complete (https://github.com/qupath/qupath/pull/1357)
@@ -40,6 +86,12 @@ This is a work-in-progress for the next QuPath release.
 * Support for regular expressions in several 'filter' fields, e.g. for projects, channels, log messages & measurements
 * `MeasurementList.asMap()` returns `Map<String, Number` rather than `Map<String, Double>`
   * This enables scripts to use `pathObject.measurements['Name'] = 2` rather than `pathObject.measurements['Name'] = 2d`
+* *View → Show command list* supports copying commands to the clipboard
+  * This helps when creating docs or answering forum posts that need specific commands
+* New *Startup script path* preference
+  * Support running a single Groovy script when QuPath launches (useful for customization)
+  * The preference can also be overridden with the system property `qupath.startup.script=/path/to/script.groovy` 
+    or blocked with `qupath.startup.script=false` (e.g. in QuPath.cfg)
 
 #### Naming & measurements
 * Improve consistency of naming, including for measurements
@@ -59,6 +111,11 @@ This is a work-in-progress for the next QuPath release.
 * New `Tiler` class to generate tiles within other objects (https://github.com/qupath/qupath/pull/1347) (https://github.com/qupath/qupath/pull/1349) (https://github.com/qupath/qupath/issues/1277)
 * Replaced `PluginRunner` with `TaskRunner` to more easily run tasks with a progress bar (https://github.com/qupath/qupath/pull/1360)
 
+#### Command line
+* System properties can be passed via the command line using Java `-D` syntax
+  * Example `QuPath -DPYTORCH_VERSION=1.13.1 -Doffline=false`
+  * These are set as QuPath is being launched, before the user interface is created
+
 #### Platforms
 * Much improved Apple Silicon support, including with OpenSlide
   * See [below](#important-info-for-mac-users) for details
@@ -76,6 +133,8 @@ This is a work-in-progress for the next QuPath release.
   * Much smaller `QuPathGUI` class
   * *These changes will require some extensions to be updated*
 * Initial work to support string localization
+* `DnnModel` simplified
+  * Generic parameter removed; see javadoc for details
 
 ### Bugs fixed
 * Cannot import GeoJSON with NaN measurements (https://github.com/qupath/qupath/issues/1293)

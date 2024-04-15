@@ -30,8 +30,10 @@ plugins {
 
 
 ext.moduleName = 'qupath.app'
-archivesBaseName = 'qupath-app'
-description = "Main QuPath application."
+base {
+    archivesName = 'qupath-app'
+    description = 'Main QuPath application.'
+}
 
 /*
  * There are several problems with jpackage on macOS:
@@ -70,7 +72,7 @@ def toolchainJavaVersion = getToolchainJavaVersion()
 application {
     mainClass = "qupath.QuPath"
     applicationName = qupathAppName
-    applicationDefaultJvmArgs = buildDefaultJvmArgs("${rootProject.buildDir}/natives", toolchainJavaVersion)
+    applicationDefaultJvmArgs = buildDefaultJvmArgs()
 
     // Necessary when using ./gradlew run to support style manager to change themes
     applicationDefaultJvmArgs << '--add-opens'
@@ -93,16 +95,6 @@ afterEvaluate {
     }
 }
 
-startScripts {
-    doLast {
-        // Update library path
-        def currentPath = "${rootProject.buildDir}/natives"
-        def newPath = '$APP_HOME/lib'
-        unixScript.text = unixScript.text.replace(currentPath, newPath)
-        windowsScript.text = unixScript.text.replace(currentPath, newPath)
-    }
-}
-
 /**
  * Determine which projects to include/exclude as dependencies
  */
@@ -115,47 +107,17 @@ dependencies {
 }
 
 /**
- * Extract native libraries.
- * This happens early, because it is useful to ensure the native libraries are
- * available if launching QuPath from an IDE.
- */
-tasks.register("extractNatives") {
-    description "Extract native libraries to a 'natives' directory"
-    group "QuPath"
-
-    doLast {
-        def nativesClassifier = project.properties['platform.classifier']
-        if (nativesClassifier == null) {
-            logger.warn("No natives classifier found!")
-            return
-        }
-        def additionalResourcesDir = file("${rootProject.buildDir}/natives")
-        configurations.runtimeClasspath.files.findAll({ it.getName().contains(nativesClassifier) }).each { file ->
-            logger.info("Extracting native libraries from {} into {}", file, additionalResourcesDir)
-            copy {
-                from zipTree(file)
-                into additionalResourcesDir.getAbsolutePath()
-                exclude "/META-INF/"
-            }
-        }
-    }
-}
-
-/**
  * Create a single javadoc jar
  */
 task mergedJavadocJar(type: Jar, dependsOn: rootProject.tasks.mergedJavadocs) {
     archiveFileName = "qupath-$qupathVersion-javadoc.jar"
-    destinationDirectory = file("${rootProject.buildDir}/docs-merged/")
+    destinationDirectory = rootProject.layout.buildDirectory.dir("docs-merged")
     from rootProject.tasks.mergedJavadocs.destinationDir
 }
 
 /**
  * Specify task dependencies
  */
-extractNatives.mustRunAfter(allprojects.tasks.clean)
-compileJava.dependsOn(extractNatives)
-jpackage.dependsOn(extractNatives)
 jpackage.dependsOn(mergedJavadocJar)
 
 /**
@@ -168,7 +130,8 @@ licenseReport {
     renderers = [new TextReportRenderer('THIRD-PARTY.txt'),
 //               new CsvReportRenderer(),
                  new InventoryHtmlReportRenderer('index.html', 'Third party licenses', fileUnknown)]
-    outputDir = "${rootProject.buildDir}/reports/dependency-license"
+
+    outputDir = rootProject.layout.buildDirectory.dir("reports/dependency-license").get().getAsFile().getAbsolutePath()
 
     // TODO: Try to remove this. It's needed (I think) due to the license plugin not supporting
     //       Gradle variants, as required by the JavaFX Gradle Plugin v0.1.0. Possibly-relevant links:
@@ -207,12 +170,8 @@ distributions {
             }
             // Copy license report
             into('lib/licenses') {
-                from "${rootProject.buildDir}/reports/dependency-license/"
+                from this.rootProject.layout.buildDirectory.dir("reports/dependency-license")
                 include 'THIRD-PARTY.txt'
-            }
-            // Copy native libraries
-            into('lib') {
-                from "${rootProject.buildDir}/natives"
             }
             // Copy native libraries
             into('lib/docs') {
@@ -259,7 +218,7 @@ runtime {
     ]
 
     def params = buildParameters()
-//  println params
+
     ext {
         preferredName = 'QuPath'
     }
@@ -346,7 +305,7 @@ def makeMacOSPkg(File appFile) {
  */
 tasks.register('jpackageFinalize') {
     doLast {
-        def outputDir = new File("${rootProject.layout.buildDirectory.get()}")
+        def outputDir = rootProject.layout.buildDirectory.get().asFile
         // Loop for Mac things to do
         def appFile = new File(outputDir, "/dist/${getCorrectAppName('.app')}")
         if (appFile.exists()) {
@@ -512,11 +471,11 @@ JPackageParams buildParameters() {
 
     def params = new JPackageParams()
     params.mainJar = project.jar.getArchiveFileName().get()
-    params.outputDir = file("${rootProject.buildDir}/dist")
+    params.outputDir = rootProject.layout.buildDirectory.dir("dist").get().getAsFile()
     params.appVersion = appVersion
     params.imageName = qupathAppName // Will need to be removed for some platforms
     params.installerName = "QuPath"
-    params.jvmArgs += buildDefaultJvmArgs('$APPDIR', toolchainJavaVersion)
+    params.jvmArgs += buildDefaultJvmArgs()
 
     // Configure according to the current platform
     def platform = properties['platform.name']
@@ -693,7 +652,7 @@ JavaVersion getToolchainJavaVersion() {
  * Java version not currently used.
  * @return
  */
-static List<String> buildDefaultJvmArgs(String libraryPath = '$APPDIR', JavaVersion javaVersion = JavaVersion.current()) {
+static List<String> buildDefaultJvmArgs(String libraryPath = null) {
     // Set up the main Java options
     def javaOptions = []
 
@@ -705,4 +664,26 @@ static List<String> buildDefaultJvmArgs(String libraryPath = '$APPDIR', JavaVers
     javaOptions << '-XX:MaxRAMPercentage=50'
 
     return javaOptions
+}
+
+
+
+
+/**
+ * Export all icons from the icon factory (useful for documentation).
+ * This is here (and not in the gui-fx module) because it's needed to load extensions.
+ */
+task exportDocs(type: JavaExec) {
+    description "Export icons and command descriptions for documentation"
+    group "QuPath"
+
+    dependsOn('compileJava')
+    def docsDir = rootProject.layout.buildDirectory.dir('qupath-docs').get().getAsFile()
+    doFirst {
+        println "Making docs dir in ${docsDir.getAbsolutePath()}"
+        docsDir.mkdirs()
+    }
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'qupath.lib.gui.tools.DocGenerator'
+    args docsDir.getAbsolutePath(), "--all"
 }

@@ -83,14 +83,14 @@ public class PathPrefs {
 	/**
 	 * Default name for preference node in this QuPath version
 	 */
-	private static final String DEFAULT_NODE_NAME = "io.github.qupath/0.5";
+	private static final String DEFAULT_NODE_NAME = "io.github.qupath/0.6";
 
 	/**
 	 * Previous preference node, in case these need to be restored.
 	 * For now, this isn't supported.
 	 */
 	@SuppressWarnings("unused")
-	private static final String PREVIOUS_NODE_NAME = "io.github.qupath/0.4";
+	private static final String PREVIOUS_NODE_NAME = "io.github.qupath/0.5";
 
 	/**
 	 * The preference manager used to store preferences.
@@ -323,6 +323,17 @@ public class PathPrefs {
 	 */
 	public static BooleanProperty showStartupMessageProperty() {
 		return showStartupMessage;
+	}
+
+
+	private static StringProperty startupScriptPath = createPersistentPreference("startupScriptPath", null);
+
+	/**
+	 * Path to a startup script that should be run immediately after QuPath's launch.
+	 * @return
+	 */
+	public static StringProperty startupScriptProperty() {
+		return startupScriptPath;
 	}
 
 
