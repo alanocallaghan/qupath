@@ -1,3 +1,25 @@
+/*-
+ * #%L
+ * This file is part of QuPath.
+ * %%
+ * Copyright (C) 2023 QuPath developers, The University of Edinburgh
+ * %%
+ * QuPath is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * QuPath is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with QuPath.  If not, see <https://www.gnu.org/licenses/>.
+ * #L%
+ */
+
+
 package qupath.lib.gui.actions.menus;
 
 import java.util.List;
@@ -11,6 +33,7 @@ import qupath.lib.gui.actions.annotations.ActionAccelerator;
 import qupath.lib.gui.actions.annotations.ActionConfig;
 import qupath.lib.gui.actions.annotations.ActionMenu;
 import qupath.lib.gui.commands.Commands;
+import qupath.lib.gui.commands.objects.SplitAnnotationsByLineCommand;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.objects.PathAnnotationObject;
@@ -158,29 +181,36 @@ public class ObjectsMenuActions implements MenuActions {
 		
 		@ActionConfig("Action.Objects.Annotation.specify")
 		public final Action SPECIFY_ANNOTATION = Commands.createSingleStageAction(() -> Commands.createSpecifyAnnotationDialog(qupath));
-		
+
+		@ActionAccelerator("shortcut+shift+a")
 		@ActionConfig("Action.Objects.Annotation.fullImage")
 		public final Action SELECT_ALL_ANNOTATION = qupath.createImageDataAction(imageData -> Commands.createFullImageAnnotation(qupath.getViewer()));
 
 		public final Action SEP_5 = ActionTools.createSeparator();
-		
+
+		@ActionAccelerator("shortcut+shift+i")
 		@ActionConfig("Action.Objects.Annotation.hierarchyInsert")
 		public final Action INSERT_INTO_HIERARCHY = qupath.createImageDataAction(imageData -> Commands.insertSelectedObjectsInHierarchy(imageData));
-		
+
+		@ActionAccelerator("shortcut+shift+r")
 		@ActionConfig("Action.Objects.Annotation.hierarchyResolve")
 		public final Action RESOLVE_HIERARCHY = qupath.createImageDataAction(imageData -> Commands.promptToResolveHierarchy(imageData));
 		
 		public final Action SEP_6 = ActionTools.createSeparator();
 
+		@ActionAccelerator("shortcut+shift+t")
 		@ActionConfig("Action.Objects.Annotation.transform")
 		public final Action RIGID_OBJECT_EDITOR = qupath.createImageDataAction(imageData -> Commands.editSelectedAnnotation(qupath));
-		
+
+		@ActionAccelerator("shift+d")
 		@ActionConfig("Action.Objects.Annotation.duplicate")
 		public final Action ANNOTATION_DUPLICATE = qupath.createImageDataAction(imageData -> Commands.duplicateSelectedAnnotations(imageData));
 
+		@ActionAccelerator("shortcut+shift+v")
 		@ActionConfig("Action.Objects.Annotation.copyToCurrentPlane")
 		public final Action ANNOTATION_COPY_TO_PLANE = qupath.createViewerAction(viewer -> Commands.copySelectedAnnotationsToCurrentPlane(viewer));
 
+		@ActionAccelerator("shift+e")
 		@ActionConfig("Action.Objects.Annotation.transferLast")
 		public final Action TRANSFER_ANNOTATION = qupath.createImageDataAction(imageData -> qupath.getViewerManager().applyLastAnnotationToActiveViewer());
 
@@ -191,7 +221,12 @@ public class ObjectsMenuActions implements MenuActions {
 		
 		@ActionConfig("Action.Objects.Annotation.split")
 		public final Action SPLIT_ANNOTATIONS = qupath.createPluginAction("Split annotations", SplitAnnotationsPlugin.class, null);
-		
+
+		private final SplitAnnotationsByLineCommand splitAnnotationsByLineCommand = new SplitAnnotationsByLineCommand();
+
+		@ActionConfig("Action.Objects.Annotation.splitByLines")
+		public final Action SPLIT_ANNOTATIONS_BY_LINES = qupath.createImageDataAction(imageData -> splitAnnotationsByLineCommand.run(imageData));
+
 		@ActionConfig("Action.Objects.Annotation.removeFragmentsFillHoles")
 		public final Action REMOVE_FRAGMENTS = qupath.createPluginAction("Remove fragments & holes", RefineAnnotationsPlugin.class, null);
 		

@@ -26,11 +26,23 @@ package qupath.lib.gui.tools;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
 import java.awt.geom.PathIterator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.SnapshotParameters;
+import javafx.scene.control.ContentDisplay;
+import javafx.scene.image.Image;
+import javafx.scene.image.WritableImage;
+import javafx.scene.layout.Region;
+import javafx.scene.text.TextAlignment;
+import javafx.scene.transform.Transform;
 import org.controlsfx.glyphfont.FontAwesome;
 import org.controlsfx.glyphfont.Glyph;
 import org.controlsfx.glyphfont.GlyphFont;
@@ -76,7 +88,8 @@ import qupath.lib.roi.interfaces.ROI;
 public class IconFactory {
 	
 	private static final Logger logger = LoggerFactory.getLogger(IconFactory.class);
-	
+
+	private final static Color DETECTION_COLOR = javafx.scene.paint.Color.rgb(20, 180, 120, 0.9);
 	
 	static class IconSuppliers {
 
@@ -121,6 +134,9 @@ public class IconFactory {
 			public Node apply(int size) {
 				var code = getCode();
 				Glyph g = font.create(code).size(size);
+				g.setAlignment(Pos.CENTER);
+				g.setContentDisplay(ContentDisplay.CENTER);
+				g.setTextAlignment(TextAlignment.CENTER);
 				g.setIcon(code);
 				g.getStyleClass().add("qupath-icon");
 				boolean useFill = false;
@@ -172,6 +188,34 @@ public class IconFactory {
 		static IntFunction<Node> lineToolIcon() {
 			return i -> createLineOrArrowIcon(i, "");
 		}
+
+		static IntFunction<Node> fillAnnotationsIcon() {
+			return (int i) -> new DuplicatableNode(() -> createFillAnnotationsIcon(i));
+		}
+
+		private static Node createFillAnnotationsIcon(int size) {
+			var fill = IconSuppliers.icoMoon('\ue900', PathPrefs.colorDefaultObjectsProperty()).apply(size);
+			fill.setOpacity(0.5);
+			var outline = IconSuppliers.icoMoon('\ue901', PathPrefs.colorDefaultObjectsProperty()).apply(size);
+			var group = new Group(
+					fill, outline
+			);
+			return group;
+		}
+
+		static IntFunction<Node> fillDetectionsIcon() {
+			return (int i) -> new DuplicatableNode(() -> createFillDetectionIcon(i));
+		}
+
+		private static Node createFillDetectionIcon(int size) {
+			var fill = IconSuppliers.icoMoon('\ue907', DETECTION_COLOR).apply(size);
+			fill.setOpacity(0.75);
+			var outline = IconSuppliers.icoMoon('\ue908', DETECTION_COLOR).apply(size);
+			var group = new Group(
+					fill, outline
+			);
+			return group;
+		}
 		
 		static IntFunction<Node> arrowToolIcon(String cap) {
 			return i -> createLineOrArrowIcon(i, cap);
@@ -213,6 +257,10 @@ public class IconFactory {
 			return i -> new DuplicatableNode(() -> drawShowNamesIcon(i));
 		}
 
+		static IntFunction<Node> createViewerGridIcon(int rows, int cols) {
+			return i -> new DuplicatableNode(() -> drawViewerGridIcon(i, rows, cols));
+		}
+
 	}
 	
 	
@@ -220,9 +268,9 @@ public class IconFactory {
 	 * Default icons for QuPath commands.
 	 */
 	@SuppressWarnings("javadoc")
-	public static enum PathIcons {	ACTIVE_SERVER(IconSuppliers.icoMoon('\ue915', ColorToolsFX.getCachedColor(0, 200, 0))),
+	public enum PathIcons {	ACTIVE_SERVER(IconSuppliers.icoMoon('\ue915', ColorToolsFX.getCachedColor(0, 200, 0))),
 									ANNOTATIONS(IconSuppliers.icoMoon('\ue901', PathPrefs.colorDefaultObjectsProperty())),
-									ANNOTATIONS_FILL(IconSuppliers.icoMoon('\ue900', PathPrefs.colorDefaultObjectsProperty())),
+									ANNOTATIONS_FILL(IconSuppliers.fillAnnotationsIcon()),
 									
 									ARROW_START_TOOL(IconSuppliers.arrowToolIcon("<")),
 									ARROW_END_TOOL(IconSuppliers.arrowToolIcon(">")),
@@ -233,29 +281,32 @@ public class IconFactory {
 									CELL_NUCLEI_BOTH(IconSuppliers.icoMoon('\ue903')),
 									CELL_ONLY(IconSuppliers.icoMoon('\ue904')),
 									CENTROIDS_ONLY(IconSuppliers.icoMoon('\ue913')),
-									
+
 									COG(IconSuppliers.icoMoon('\ue905')),
 									CONTRAST(IconSuppliers.icoMoon('\ue906')),
-									
-									DETECTIONS(IconSuppliers.icoMoon('\ue908', javafx.scene.paint.Color.rgb(20, 180, 120, 0.9))),
-									DETECTIONS_FILL(IconSuppliers.icoMoon('\ue907', javafx.scene.paint.Color.rgb(20, 180, 120, 0.9))),
+
+									DETECTIONS(IconSuppliers.icoMoon('\ue908', DETECTION_COLOR)),
+									DETECTIONS_FILL(IconSuppliers.fillDetectionsIcon()),
+									DOWNLOAD(IconSuppliers.fontAwesome(FontAwesome.Glyph.DOWNLOAD)),
 
 									ELLIPSE_TOOL(IconSuppliers.ellipseToolIcon()),
 									EXTRACT_REGION(IconSuppliers.icoMoon('\ue90a')),
 
-									SELECTION_MODE(IconSuppliers.selectionModeIcon()),
-									
 									GRID(IconSuppliers.icoMoon('\ue90b')),
+									GITHUB(IconSuppliers.fontAwesome(FontAwesome.Glyph.GITHUB)),
 
 									HELP(IconSuppliers.fontAwesome(FontAwesome.Glyph.QUESTION_CIRCLE)),
 
 									INFO(IconSuppliers.fontAwesome(FontAwesome.Glyph.INFO)),
 									INACTIVE_SERVER(IconSuppliers.icoMoon('\ue915', ColorToolsFX.getCachedColor(200, 0, 0))),
-									
+
+									LOG_VIEWER(IconSuppliers.fontAwesome(FontAwesome.Glyph.LIST_ALT)), // Shows list in window
+//									LOG_VIEWER(IconSuppliers.fontAwesome(FontAwesome.Glyph.LIST_UL)), // Alternative
 									LINE_TOOL(IconSuppliers.lineToolIcon()),
 									LOCATION(IconSuppliers.icoMoon('\ue90d')),
 									
 									MEASURE(IconSuppliers.icoMoon('\ue90e')),
+									MINUS(IconSuppliers.fontAwesome(FontAwesome.Glyph.MINUS)),
 									MOVE_TOOL(IconSuppliers.icoMoon('\ue90f')),
 									
 									NUCLEI_ONLY(IconSuppliers.icoMoon('\ue910')),
@@ -271,7 +322,12 @@ public class IconFactory {
 									POLYLINE_TOOL(IconSuppliers.polylineToolIcon()),
 									
 									RECTANGLE_TOOL(IconSuppliers.rectangleToolIcon()),
-									
+									REFRESH(IconSuppliers.fontAwesome(FontAwesome.Glyph.REFRESH)),
+
+									SELECTION_MODE(IconSuppliers.selectionModeIcon()),
+
+									SCRIPT_EDITOR(IconSuppliers.fontAwesome(FontAwesome.Glyph.CODE)),
+
 									SHOW_NAMES(IconSuppliers.showNamesIcon()),
 									SHOW_SCALEBAR(IconSuppliers.icoMoon('\ue917')),
 									SCREENSHOT(IconSuppliers.icoMoon('\ue918')),
@@ -282,6 +338,12 @@ public class IconFactory {
 
 									TABLE(IconSuppliers.icoMoon('\ue91a')),
 									TMA_GRID(IconSuppliers.icoMoon('\ue91b', PathPrefs.colorTMAProperty())),
+
+									VIEWER_GRID_1x1(IconSuppliers.createViewerGridIcon(1, 1)),
+									VIEWER_GRID_1x2(IconSuppliers.createViewerGridIcon(1, 2)),
+									VIEWER_GRID_2x1(IconSuppliers.createViewerGridIcon(2, 1)),
+									VIEWER_GRID_2x2(IconSuppliers.createViewerGridIcon(2, 2)),
+									VIEWER_GRID_3x3(IconSuppliers.createViewerGridIcon(3, 3)),
 
 									WAND_TOOL(IconSuppliers.icoMoon('\ue91c', PathPrefs.colorDefaultObjectsProperty())),
 									WARNING(IconSuppliers.fontAwesome(FontAwesome.Glyph.WARNING)),
@@ -316,11 +378,14 @@ public class IconFactory {
 				new MoveTo(pad, height-pad),
 				new LineTo(width-pad, pad)
 				);
-		
+
 		bindShapeColorToObjectColor(path);
 		path.fillProperty().bind(path.strokeProperty());
 		
 		double length = Math.min(width, height)/3.0;
+		if (cap.contains(">") && cap.contains("<")) {
+			path.setClip(new Rectangle(pad, pad, width-pad*2, height-pad*2));
+		}
 		if (cap.contains(">")) {
 			path.getElements().addAll(
 					new MoveTo(width-pad, pad),
@@ -328,6 +393,8 @@ public class IconFactory {
 					new LineTo(width-pad, pad+length),
 					new ClosePath()
 					);
+			if (path.getClip() == null)
+				path.setClip(new Rectangle(0, pad, width-pad, height-pad));
 		}
 		if (cap.contains("<")) {
 			path.getElements().addAll(
@@ -336,8 +403,13 @@ public class IconFactory {
 					new LineTo(pad+length, height-pad),
 					new ClosePath()
 					);
+			if (path.getClip() == null)
+				path.setClip(new Rectangle(pad, 0, width-pad, height-pad));
 		}
-		return path;
+		if (path.getClip() == null)
+			path.setClip(new Rectangle(0, 0, width, height));
+
+		return wrapInGroup(width, height, path);
 	}
 	
 	private static Node drawRectangleIcon(int size) {
@@ -347,27 +419,65 @@ public class IconFactory {
 		shape.setStrokeWidth(1.0);
 		bindShapeColorToObjectColor(shape);
 		shape.setFill(Color.TRANSPARENT);
-		return shape;
+		return wrapInGroup(size, shape);
 	}
 
-	
+	/**
+	 * Wrap nodes in a group that also contains a fixed-size transparent square.
+	 * This can be used to help ensure consistent icon sizes.
+	 * @param size
+	 * @param nodes
+	 * @return
+	 */
+	private static Group wrapInGroup(double size, Node... nodes) {
+		return wrapInGroup(size, size, nodes);
+	}
+
+	/**
+	 * Wrap nodes in a group that also contains a fixed-size transparent rectangle.
+	 * This can be used to help ensure consistent icon sizes.
+	 * @param width
+	 * @param height
+	 * @param nodes
+	 * @return
+	 */
+	private static Group wrapInGroup(double width, double height, Node... nodes) {
+		var rect = new Rectangle(0, 0, width, height);
+		rect.setFill(Color.TRANSPARENT);
+		var group = new Group(nodes);
+		group.getChildren().add(0, rect);
+		return group;
+	}
+
 	private static Node drawPointsIcon(int sizeOrig) {
+		return drawPointsIcon(sizeOrig, null);
+	}
+
+	private static Node drawPointsIcon(int sizeOrig, Color color) {
 		
 		double pad = 1.0;
 		double size = sizeOrig - pad*2;
 		double radius = size/5.0;
 		
-		var c1 = new Circle(size/2.0, radius, radius, Color.TRANSPARENT);
-		bindShapeColorToObjectColor(c1);
-		
-		var c2 = new Circle(radius, size-radius, radius, Color.TRANSPARENT);
-		bindShapeColorToObjectColor(c2);
-		
-		var c3 = new Circle(size-radius, size-radius, radius, Color.TRANSPARENT);
-		bindShapeColorToObjectColor(c3);
-		
-		var group = new Group(c1, c2, c3);
-		return group;
+		var c1 = new Circle(pad+size/2.0, pad+radius, radius, Color.TRANSPARENT);
+
+		var c2 = new Circle(pad+radius, pad+size-radius, radius, Color.TRANSPARENT);
+
+		var c3 = new Circle(pad+size-radius, pad+size-radius, radius, Color.TRANSPARENT);
+		if (color != null) {
+			// Use fixed color
+			c1.setStroke(color);
+			c2.setStroke(color);
+			c3.setStroke(color);
+		} else {
+			// Use default object color
+			bindShapeColorToObjectColor(c1);
+			bindShapeColorToObjectColor(c2);
+			bindShapeColorToObjectColor(c3);
+		}
+
+//		return new Group(c1, c2, c3);
+		return wrapInGroup(sizeOrig, c1, c2, c3);
 	}
 	
 	
@@ -389,8 +499,7 @@ public class IconFactory {
 		addNodesToPath(path, Math.max(3.0, size/10.0));
 		bindShapeColorToObjectColor(path);
 
-		return addNodesToPath(path, Math.max(2.0, size/10.0));
-//		return path;
+		return wrapInGroup(size, addNodesToPath(path, Math.max(2.0, size/10.0)));
 	}
 	
 	private static Node drawBrushIcon(int size) {
@@ -404,9 +513,11 @@ public class IconFactory {
 				new QuadCurveTo(size-size/8.0, 0, size/2.0, 0),
 				new ClosePath()
 				);
+//		var transform = Affine.rotate(30.0, size/2.0, size/2.0);
+//		path.getTransforms().add(transform);
 		path.setRotate(30.0);
 		bindShapeColorToObjectColor(path);		
-		return path;
+		return wrapInGroup(size, path);
 	}
 	
 	private static Node drawPolylineIcon(int size) {
@@ -423,7 +534,7 @@ public class IconFactory {
 		
 		bindShapeColorToObjectColor(path);
 		
-		return 	addNodesToPath(path, Math.max(2.0, size/10.0));
+		return wrapInGroup(size, addNodesToPath(path, Math.max(2.0, size/10.0)));
 //		return path;
 	}
 	
@@ -465,7 +576,7 @@ public class IconFactory {
 		shape.setStrokeWidth(1.0);
 		bindShapeColorToObjectColor(shape);
 		shape.setFill(Color.TRANSPARENT);
-		return shape;
+		return wrapInGroup(size, shape);
 	}
 	
 	private static Node drawShowNamesIcon(int size) {
@@ -476,12 +587,54 @@ public class IconFactory {
 
 	private static Node drawPixelClassificationIcon(int size) {
 		var label = new Label("C");
+		label.getStyleClass().add("qupath-icon");
 		return label;
+	}
+
+
+	private static Node drawViewerGridIcon(int size, int rows, int cols) {
+		double pad = 2.0;
+		List<Node> nodes = new ArrayList<>();
+		double h = (size - pad*2) / rows;
+		double w = (size - pad*2) / cols;
+
+		var rect = new Rectangle(pad, pad, size-pad*2, size-pad*2);
+		double arcSize = size / 6.0;
+		rect.setArcHeight(arcSize);
+		rect.setArcWidth(arcSize);
+		styleIconShape(rect);
+		nodes.add(rect);
+
+		for (int r = 1; r < rows; r++) {
+			double y = pad + r * h;
+			var line = new Line(pad, y, size - pad, y);
+			styleIconShape(line);
+			nodes.add(line);
+		}
+
+		for (int c = 1; c < cols; c++) {
+			double x = pad + c * w;
+			var line = new Line(x, pad, x, size - pad);
+			styleIconShape(line);
+			nodes.add(line);
+		}
+
+		var group = wrapInGroup(size, nodes.toArray(Node[]::new));
+		group.getStyleClass().add("qupath-icon");
+		return group;
+	}
+
+	private static void styleIconShape(Shape shape) {
+		shape.setFill(Color.TRANSPARENT);
+		shape.setStrokeWidth(1.0);
+		shape.setSmooth(true);
+		shape.setStyle("-fx-stroke: -fx-text-fill;");
 	}
 
 	
 	private static Node drawSelectionModeIcon(int size) {
 		var text = new Text("S");
+		text.setTextAlignment(TextAlignment.CENTER);
 		// Because the default selection color yellow, it's not very prominent
 //		bindColorPropertyToRGB(text.fillProperty(), PathPrefs.colorSelectedObjectProperty());
 		bindColorPropertyToRGB(text.fillProperty(), PathPrefs.colorDefaultObjectsProperty());
@@ -591,12 +744,7 @@ public class IconFactory {
 			return line;
 		} else if (roi.isPoint()) {
 			// Just show generic points
-			Node node = IconFactory.createNode(Math.min(width, height), Math.min(width, height), IconFactory.PathIcons.POINTS_TOOL);	
-			if (node instanceof Glyph) {
-				var glyph = (Glyph)node;
-				glyph.textFillProperty().unbind();
-				glyph.setColor(color);
-			}
+			var node = drawPointsIcon(Math.min(width, height), color);
 			return node;
 		} else {
 			var path = pathCache.getOrDefault(roi, null);
@@ -679,6 +827,43 @@ public class IconFactory {
 			return null;
 		}
 	}
-	
-	
+
+	/**
+	 * Create an image from a default icon glyph.
+	 * @param icon the icon to use
+	 * @param size the requested size of the image
+	 * @return
+	 */
+	public static Image createIconImage(PathIcons icon, int size) {
+		var glyph = icon.createGlyph(16);
+		glyph.setStyle("-fx-background-color: transparent;");
+		return createIconImage((Region)glyph, size);
+	}
+
+
+	private static Image createIconImage(Region glyph, int size) {
+		Scene scene = glyph.getScene();
+		if (scene == null) {
+			scene = new Scene(glyph);
+			scene.setFill(Color.TRANSPARENT);
+		}
+
+		// Create initial snapshot to ensure the scene is sized correctly
+		var image = new WritableImage(size, size);
+		scene.snapshot(image);
+
+		// Add padding to ensure the icon is centered
+		double maxDim = Math.max(scene.getWidth(), scene.getHeight());
+		double padX = (maxDim - scene.getWidth())/2.0;
+		double padY = (maxDim - scene.getHeight())/2.0;
+		glyph.setPadding(new Insets(padY, padX, padY, padX));
+
+		// Apply scaling within camera
+		double scale = size / maxDim;
+		var params = new SnapshotParameters();
+		params.setTransform(Transform.scale(scale, scale));
+
+		return glyph.snapshot(params, image);
+	}
+
 }

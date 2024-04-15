@@ -4,7 +4,7 @@
  * %%
  * Copyright (C) 2014 - 2016 The Queen's University of Belfast, Northern Ireland
  * Contact: IP Management (ipmanagement@qub.ac.uk)
- * Copyright (C) 2018 - 2022 QuPath developers, The University of Edinburgh
+ * Copyright (C) 2018 - 2023 QuPath developers, The University of Edinburgh
  * %%
  * QuPath is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -30,13 +30,17 @@ import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,10 +54,14 @@ import javafx.scene.input.ClipboardContent;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import qupath.fx.dialogs.FileChoosers;
+import qupath.lib.common.ThreadTools;
 import qupath.lib.display.ChannelDisplayInfo;
 import qupath.lib.display.DirectServerChannelInfo;
 import qupath.lib.display.ImageDisplay;
+import qupath.lib.display.settings.DisplaySettingUtils;
+import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.TaskRunnerFX;
 import qupath.lib.gui.UserDirectoryManager;
 import qupath.lib.gui.charts.Charts;
 import qupath.lib.gui.commands.SummaryMeasurementTableCommand;
@@ -78,9 +86,10 @@ import qupath.lib.objects.PathRootObject;
 import qupath.lib.objects.PathAnnotationObject;
 import qupath.lib.objects.PathDetectionObject;
 import qupath.lib.objects.TMACoreObject;
-import qupath.lib.plugins.CommandLinePluginRunner;
+import qupath.lib.plugins.CommandLineTaskRunner;
 import qupath.lib.plugins.PathPlugin;
-import qupath.lib.plugins.PluginRunner;
+import qupath.lib.plugins.TaskRunner;
+import qupath.lib.plugins.TaskRunnerUtils;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.scripting.QP;
 
@@ -135,7 +144,7 @@ public class QPEx extends QP {
 	 * @param path path to the export directory
 	 * @param downsampleFactor downsample applied to each TMA core image
 	 */
-	public static void exportTMAData(final String path, final double downsampleFactor) {
+	public static void exportTMAData(final String path, final double downsampleFactor) throws IOException {
 		exportTMAData((ImageData<BufferedImage>)getCurrentImageData(), resolvePath(path), downsampleFactor);
 	}
 
@@ -146,7 +155,7 @@ public class QPEx extends QP {
 	 * @param path path to the export directory
 	 * @param downsampleFactor downsample applied to each TMA core image
 	 */
-	public static void exportTMAData(final ImageData<BufferedImage> imageData, final String path, final double downsampleFactor) {
+	public static void exportTMAData(final ImageData<BufferedImage> imageData, final String path, final double downsampleFactor) throws IOException {
 		if (imageData == null)
 			return;
 		TMADataIO.writeTMAData(new File(resolvePath(path)), imageData, null, downsampleFactor);
@@ -227,12 +236,12 @@ public class QPEx extends QP {
 			Constructor<?> cons = cPlugin.getConstructor();
 			final PathPlugin plugin = (PathPlugin)cons.newInstance();
 			pluginName = plugin.getName();
-			PluginRunner runner;
+			TaskRunner runner;
 			// TODO: Give potential of passing a plugin runner
 			var qupath = getQuPath();
 			if (isBatchMode() || imageData != qupath.getImageData()) {
-				runner = new CommandLinePluginRunner(imageData);
-				completed = plugin.runPlugin(runner, args);
+				runner = new CommandLineTaskRunner();
+				completed = plugin.runPlugin(runner, imageData, args);
 				cancelled = runner.isCancelled();
 			}
 			else {
@@ -265,7 +274,32 @@ public class QPEx extends QP {
 	static boolean isBatchMode() {
 		return getQuPath() == null || !getQuPath().getStage().isShowing();
 	}
-	
+
+	/**
+	 * Create a task runner with the default number of threads defined by {@link ThreadTools#getParallelism()}.
+	 * This will either be interactive (if QuPath is running, and the current image is open or headless.
+	 * @return
+	 */
+	public static TaskRunner createTaskRunner() {
+		return createTaskRunner(ThreadTools.getParallelism());
+	}
+
+	/**
+	 * Create a task runner with the specified number of threads.
+	 * This will either be interactive (if QuPath is running, and the current image is open or headless.
+	 * @param nThreads number of threads for the task runner to use
+	 * @return
+	 */
+	public static TaskRunner createTaskRunner(int nThreads) {
+		if (isBatchMode() || getCurrentViewer().getImageData() != getCurrentImageData()) {
+			logger.info("Creating headless task runner with {} threads", nThreads);
+			return TaskRunnerUtils.getDefaultInstance().createHeadlessTaskRunner(nThreads);
+		} else {
+			logger.info("Creating interactive task runner with {} threads", nThreads);
+			return new TaskRunnerFX(getQuPath(), nThreads);
+		}
+	}
+
 	
 	/**
 	 * Prompt the user to select a file from a file chooser.
@@ -361,24 +395,38 @@ public class QPEx extends QP {
 	 * @param channel channel number (0-based index)
 	 * @param minDisplay
 	 * @param maxDisplay
+	 * @return true if it was possible to set the display range, false otherwise (e.g. if the image could not be accessed,
+	 *         or the channel was out of range).
 	 */
-	public static void setChannelDisplayRange(ImageData<BufferedImage> imageData, int channel, double minDisplay, double maxDisplay) {
+	public static boolean setChannelDisplayRange(ImageData<BufferedImage> imageData, int channel, double minDisplay, double maxDisplay) {
 		// Try to get an existing display if the image is currently open
 		var viewer = getQuPath().getAllViewers().stream()
 				.filter(v -> v.getImageData() == imageData)
 				.findFirst()
 				.orElse(null);
-		ImageDisplay display = viewer == null ? new ImageDisplay(imageData) : viewer.getImageDisplay();
+		ImageDisplay display;
+		if (viewer == null) {
+			try {
+				display = ImageDisplay.create(imageData);
+			} catch (IOException e) {
+				logger.warn("Unable to set the display range for {} - ImageDisplay could not be initialized",
+						imageData, e);
+				return false;
+			}
+		} else {
+			display = viewer.getImageDisplay();
+		}
 		var available = display.availableChannels();
 		if (channel < 0 || channel >= available.size()) {
 			logger.warn("Channel {} is out of range ({}-{}) - cannot set display range", channel, 0, available.size()-1);
-			return;
+			return false;
 		}
 		var info = display.availableChannels().get(channel);
 		display.setMinMaxDisplay(info, (float)minDisplay, (float)maxDisplay);
 		// Update the viewer is necessary
 		if (viewer != null)
 			viewer.repaintEntireImage();
+		return true;
 	}
 	
 	/**
@@ -404,7 +452,18 @@ public class QPEx extends QP {
 				.filter(v -> v.getImageData() == imageData)
 				.findFirst()
 				.orElse(null);
-		ImageDisplay display = viewer == null ? new ImageDisplay(imageData) : viewer.getImageDisplay();
+		ImageDisplay display;
+		if (viewer == null) {
+			try {
+				display = ImageDisplay.create(imageData);
+			} catch (IOException e) {
+				logger.warn("Unable to set the display range for {} - ImageDisplay could not be initialized",
+						imageData, e);
+				return;
+			}
+		} else {
+			display = viewer.getImageDisplay();
+		}
 		var available = display.availableChannels();
 		ChannelDisplayInfo info = null;
 		var serverChannels = imageData.getServer().getMetadata().getChannels();
@@ -621,6 +680,95 @@ public class QPEx extends QP {
 		content.putString(o.toString());
 		Clipboard.getSystemClipboard().setContent(content);
 	}
+
+
+	/**
+	 * Load a display settings object from a file path or from the current project.
+	 * @param name
+	 * @return the settings if they could be read, or null otherwise
+	 */
+	public static ImageDisplaySettings loadDisplaySettings(String name) {
+		var project = getProject();
+		if (project != null) {
+			var manager = DisplaySettingUtils.getResourcesForProject(project);
+			try {
+				if (manager.getNames().contains(name))
+					return manager.get(name);
+			} catch (IOException e) {
+				logger.error("Error attempting to access resource manager for project {}", project, e);
+			}
+		}
+		var path = Paths.get(name);
+		if (Files.exists(path)) {
+			try {
+				return DisplaySettingUtils.parseDisplaySettings(path);
+			} catch (IOException e) {
+				logger.error("Error attempting to read {}", path, e);
+			}
+		}
+		logger.warn("Cannot find display settings {} either as a file path or in the current project", name);
+		return null;
+	}
+
+	/**
+	 * Apply the display settings with the specified name or file path to the current version.
+	 * This provides a convenient alternative to
+	 * <p>
+	 * <pre><code>
+	 * var settings = loadDisplaySettings(name);
+	 * var viewer = getCurrentViewer();
+	 * if (settings != null)
+	 *     applyDisplaySettings(viewer, settings);
+	 * </code>
+	 * </pre>
+	 * @param name
+	 * @return
+	 * @see #loadDisplaySettings(String)
+	 */
+	public static boolean applyDisplaySettings(String name) {
+		var settings = loadDisplaySettings(name);
+		if (settings != null)
+			return applyDisplaySettings(getCurrentViewer(), settings);
+		else {
+			logger.warn("Unable to load display settings from {}", name);
+			return false;
+		}
+	}
+
+	/**
+	 * Apply the display settings to the current viewer.
+	 * @param settings
+	 * @return
+	 */
+	public static boolean applyDisplaySettings(ImageDisplaySettings settings) {
+		return applyDisplaySettings(getCurrentViewer(), settings);
+	}
+
+	/**
+	 * Apply the display settings to the specified viewer.
+	 * @param viewer
+	 * @param settings
+	 * @return
+	 */
+	public static boolean applyDisplaySettings(QuPathViewer viewer, ImageDisplaySettings settings) {
+		if (viewer != null && settings != null && DisplaySettingUtils.applySettingsToDisplay(viewer.getImageDisplay(), settings)) {
+			maybeSyncSettingsAcrossViewers(viewer.getImageDisplay());
+			return true;
+		}
+		return false;
+	}
+
+	private static void maybeSyncSettingsAcrossViewers(ImageDisplay display) {
+		var qupath = getQuPath();
+		if (qupath == null || display == null || !PathPrefs.keepDisplaySettingsProperty().get())
+			return;
+		for (var otherViewer : qupath.getAllViewers()) {
+			if (!otherViewer.hasServer() || Objects.equals(display, otherViewer.getImageDisplay()))
+				continue;
+			otherViewer.getImageDisplay().updateFromDisplay(display);
+		}
+	}
+
 	
 	
 }

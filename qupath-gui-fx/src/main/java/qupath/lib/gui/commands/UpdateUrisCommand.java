@@ -161,6 +161,7 @@ public class UpdateUrisCommand<T extends UriResource> {
 				Dialogs.showInfoNotification("Update URIs", n + " URIs updated");
 		} catch (IOException e) {
 			Dialogs.showErrorMessage("Update URIs", e);
+			logger.error(e.getMessage(), e);
 		}
 		return n;
 	}
@@ -389,7 +390,7 @@ public class UpdateUrisCommand<T extends UriResource> {
 				return;
 			var uriReplacement = replacements.get(uriOriginal);
 			var defaultPath = uriReplacement == null ? uriOriginal.getURI().toString() : uriReplacement.getURI().toString();
-			String path = FileChoosers.promptForFilePathOrURI(FXUtils.getWindow(this), "Change URI", defaultPath, null, null);
+			String path = FileChoosers.promptForFilePathOrURI(FXUtils.getWindow(this), "Change URI", defaultPath);
 			if (path != null && !path.isBlank()) {
 				URI uri = null;
 				try {

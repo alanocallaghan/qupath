@@ -85,6 +85,7 @@ import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.ImageData.ImageType;
 import qupath.lib.images.servers.WrappedBufferedImageServer;
+import qupath.lib.io.PathIO;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjectReader;
 import qupath.lib.images.servers.ImageServer;
@@ -163,15 +164,20 @@ class ProjectImportImagesCommand {
 	             } else {
 	            	 if (item == null)
 	            		 setText("Default (let QuPath decide)");
-	            	 else
-	            		 setText(item.getName());
+	            	 else {
+						 // Make the name a little more readable, without adding confusing
+						 String name = item.getName();
+						 if (name.toLowerCase().endsWith("builder"))
+							 name = name.substring(0, name.length()-"builder".length()).strip();
+						 setText(name);
+					 }
 	             }
 	         }
 		}
 		
 		boolean requestBuilder = builder == null;
 		ComboBox<ImageServerBuilder<BufferedImage>> comboBuilder = new ComboBox<>();
-		Label labelBuilder = new Label("Image provider");
+		Label labelBuilder = new Label("Image server");
 		if (requestBuilder) {
 			comboBuilder.setCellFactory(p -> new BuilderListCell());
 			comboBuilder.setButtonCell(new BuilderListCell());
@@ -262,6 +268,7 @@ class ProjectImportImagesCommand {
 						listView.getItems().addAll(paths);
 				} catch (Exception ex) {
 					Dialogs.showErrorMessage("Drag & Drop", ex);
+					logger.error(ex.getMessage(), ex);
 				}
 			}
 			e.setDropCompleted(true);
@@ -328,9 +335,11 @@ class ProjectImportImagesCommand {
 				var pool = Executors.newFixedThreadPool(ThreadTools.getParallelism(), ThreadTools.createThreadFactory("project-import", true));
 				List<Future<List<ServerBuilder<BufferedImage>>>> results = new ArrayList<>();
 				List<ProjectImageEntry<BufferedImage>> projectImages = new ArrayList<>();
+				List<File> existingDataFiles = new ArrayList<>();
 				for (var item : items) {
 					// Try to load items from a project if possible
-					if (item.toLowerCase().endsWith(ProjectIO.DEFAULT_PROJECT_EXTENSION)) {
+					String lower = item.toLowerCase();
+					if (lower.endsWith(ProjectIO.DEFAULT_PROJECT_EXTENSION)) {
 						try {
 							var tempProject = ProjectIO.loadProject(GeneralTools.toURI(item), BufferedImage.class);
 							projectImages.addAll(tempProject.getImageList());
@@ -338,16 +347,29 @@ class ProjectImportImagesCommand {
 							logger.error("Unable to add images from {} ({})", item, e.getLocalizedMessage());
 						}
 						continue;
+					} else if (lower.endsWith(".qpdata")) {
+						var file = new File(item);
+						if (file.exists()) {
+							existingDataFiles.add(file);
+							continue;
+						}
 					}
 					results.add(pool.submit(() -> {
 						try {
 							var uri = GeneralTools.toURI(item);
 							UriImageSupport<BufferedImage> support;
-							if (requestedBuilder == null)
+							if (requestedBuilder == null) {
 								support = ImageServers.getImageSupport(uri, args);
-							else
+								if (support == null)
+									logger.warn("Unable to open {} with any reader", uri);
+							} else {
 								support = ImageServers.getImageSupport(requestedBuilder, uri, args);
-							if (support != null)
+								if (support == null)
+									logger.warn("Unable to open {} with {}", uri, requestedBuilder.getName());
+							}
+							if (support == null)
+								return Collections.emptyList();
+							else
 								return support.getBuilders();
 						} catch (Exception e) {
 							logger.error("Unable to add " + item, e);
@@ -372,8 +394,8 @@ class ProjectImportImagesCommand {
 						}
 					}
 				}
-				
-				// If we have 'standard' image paths, use these next
+
+				// Figure out how many 'standard' image paths with builders we have
 				List<ServerBuilder<BufferedImage>> builders = new ArrayList<>();
 				for (var result : results) {
 					try {
@@ -382,8 +404,33 @@ class ProjectImportImagesCommand {
 						logger.error("Execution exception importing image", e);
 					}
 				}
-				
-				long max = builders.size();
+
+				// Determine the total number of images to add
+				long max = builders.size() + existingDataFiles.size();
+
+				// If we have data files, use them next
+				// Don't parallelize this because it might require a lot of memory for large data files
+				if (!existingDataFiles.isEmpty()) {
+					if (existingDataFiles.size() == 1)
+						updateMessage("Importing 1 image from existing data file");
+					else
+						updateMessage("Importing " + existingDataFiles.size() + " images from existing data files");
+					for (var file : existingDataFiles) {
+						try {
+							var imageData = PathIO.readImageData(file, null, null, BufferedImage.class);
+							var entry = project.addImage(imageData.getServer().getBuilder());
+							initializeEntry(entry, imageData.getImageType(), false, false);
+							entry.saveImageData(imageData);
+							updateProgress(counter.incrementAndGet(), max);
+							imageData.getServer().close();
+						} catch (Exception e) {
+							logger.warn("Unable to read image data from file: {}", file, e.getMessage());
+						}
+					}
+				}
+
+				// Finally work through the standard images
+				// We can parallelize the slow initialization step
 				List<ProjectImageEntry<BufferedImage>> allAddedEntries = new ArrayList<>();
 				if (!builders.isEmpty()) {
 					if (max == 1)
@@ -409,10 +456,6 @@ class ProjectImportImagesCommand {
 					// Add everything in order first
 					List<ProjectImageEntry<BufferedImage>> entries = new ArrayList<>();
 					for (var builder : builders) {
-//						if (rotation != null && rotation != Rotation.ROTATE_NONE)
-//							builder = RotatedImageServer.getRotatedBuilder(builder, rotation);
-//						if (swapRedBlue)
-//							builder = RearrangeRGBImageServer.getSwapRedBlueBuilder(builder);
 						entries.add(project.addImage(builder));
 					}
 					allAddedEntries.addAll(entries);
@@ -473,6 +516,7 @@ class ProjectImportImagesCommand {
 			project.syncChanges();
 		} catch (IOException e1) {
 			Dialogs.showErrorMessage("Sync project", e1);
+			logger.error(e1.getMessage(), e1);
 		}
 		qupath.refreshProject();
 		
@@ -749,7 +793,7 @@ class ProjectImportImagesCommand {
 			if (imageDisplay == null) {
 				// By wrapping the thumbnail, we avoid slow z-stack/time series requests & determine brightness & contrast just from one plane
 				var wrappedServer = new WrappedBufferedImageServer("Dummy", img2, server.getMetadata().getChannels());
-				imageDisplay = new ImageDisplay(new ImageData<>(wrappedServer));
+				imageDisplay = ImageDisplay.create(new ImageData<>(wrappedServer));
 //				imageDisplay = new ImageDisplay(new ImageData<>(server));
 			}
 			for (ChannelDisplayInfo info : imageDisplay.selectedChannels()) {

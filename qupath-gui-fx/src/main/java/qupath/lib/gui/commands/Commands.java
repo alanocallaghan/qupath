@@ -21,30 +21,6 @@
 
 package qupath.lib.gui.commands;
 
-import java.awt.Window;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.io.StringWriter;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-
-import org.controlsfx.control.CheckListView;
-import org.controlsfx.control.action.Action;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.StringProperty;
@@ -53,6 +29,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar.ButtonData;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
@@ -61,7 +38,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
-import javafx.scene.control.ButtonBar.ButtonData;
 import javafx.scene.control.cell.CheckBoxListCell;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -72,19 +48,26 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
-import qupath.fx.utils.FXUtils;
+import org.controlsfx.control.CheckListView;
+import org.controlsfx.control.action.Action;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.fx.dialogs.Dialogs;
 import qupath.fx.dialogs.FileChoosers;
+import qupath.fx.utils.FXUtils;
+import qupath.fx.utils.GridPaneUtils;
 import qupath.lib.analysis.DistanceTools;
 import qupath.lib.analysis.features.ObjectMeasurements.ShapeFeatures;
+import qupath.lib.awt.common.BufferedImageTools;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.ExtensionClassLoader;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.UserDirectoryManager;
 import qupath.lib.gui.actions.ActionTools;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.images.servers.RenderedImageServer;
 import qupath.lib.gui.panes.MeasurementMapPane;
 import qupath.lib.gui.panes.ObjectDescriptionPane;
@@ -93,7 +76,6 @@ import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.tma.TMASummaryViewer;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.gui.tools.GuiTools;
-import qupath.fx.utils.GridPaneUtils;
 import qupath.lib.gui.viewer.GridLines;
 import qupath.lib.gui.viewer.OverlayOptions;
 import qupath.lib.gui.viewer.QuPathViewer;
@@ -134,6 +116,26 @@ import qupath.lib.roi.RoiTools.CombineOp;
 import qupath.lib.roi.ShapeSimplifier;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.scripting.QP;
+
+import java.awt.Window;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.WeakHashMap;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Helper class implementing simple 'single-method' commands for easy inclusion in the GUI.
@@ -335,8 +337,15 @@ public class Commands {
 		}
 		
 		ImageServer<BufferedImage> server = viewer.getServer();
-		if (renderedImage)
-			server = RenderedImageServer.createRenderedServer(viewer);
+		if (renderedImage) {
+			try {
+				server = RenderedImageServer.createRenderedServer(viewer);
+			} catch (IOException e) {
+				Dialogs.showErrorMessage("Export image region", "Unable to create rendered image server");
+				logger.error(e.getMessage(), e);
+				return;
+			}
+		}
 		PathObject pathObject = viewer.getSelectedObject();
 		ROI roi = pathObject == null ? null : pathObject.getROI();
 		
@@ -451,8 +460,15 @@ public class Commands {
 		exportDownsample.set(downsample.get());
 		
 		// Now that we know the output, we can create a new server to ensure it is downsampled as the necessary resolution
-		if (renderedImage && downsample.get() != server.getDownsampleForResolution(0))
-			server = new RenderedImageServer.Builder(viewer).downsamples(downsample.get()).build();
+		if (renderedImage && downsample.get() != server.getDownsampleForResolution(0)) {
+			try {
+				server = new RenderedImageServer.Builder(viewer).downsamples(downsample.get()).build();
+			} catch (IOException e) {
+				Dialogs.showErrorMessage("Export image region", "Unable to create rendered image server");
+				logger.error(e.getMessage(), e);
+				return;
+			}
+		}
 		
 //		selectedImageType.set(comboImageType.getSelectionModel().getSelectedItem());
 		
@@ -486,7 +502,8 @@ public class Commands {
 				writer.writeImage(server, request, fileOutput.getAbsolutePath());
 			lastWriter = writer;
 		} catch (IOException e) {
-			Dialogs.showErrorMessage("Export region", e);
+			Dialogs.showErrorMessage("Export region", e.getLocalizedMessage());
+			logger.error(e.getMessage(), e);
 		}
 	}
 	
@@ -695,7 +712,8 @@ public class Commands {
 				PathPrefs.exportPreferences(stream);
 				return true;
 			} catch (Exception e) {
-				Dialogs.showErrorMessage("Import preferences", e);
+				Dialogs.showErrorMessage("Import preferences", e.getLocalizedMessage());
+				logger.error(e.getMessage(), e);
 			}
 		}
 		return false;
@@ -714,6 +732,7 @@ public class Commands {
 				return true;
 			} catch (Exception e) {
 				Dialogs.showErrorMessage("Import preferences", e);
+				logger.error(e.getMessage(), e);
 			}
 		}
 		return false;
@@ -754,6 +773,8 @@ public class Commands {
 		var scene = new Scene(pane.getPane());
 		stage.setScene(scene);
 		stage.setWidth(300);
+		stage.setMinHeight(200);
+		stage.setMinWidth(200);
 		stage.setTitle("Specify annotation");
 		stage.initOwner(qupath.getStage());
 		return stage;
@@ -825,14 +846,16 @@ public class Commands {
 			}
 		} catch (IOException e) {
 			Dialogs.showErrorMessage("Save ImageData", e);
+			logger.error(e.getMessage(), e);
 			return false;
 		}
 	}
 	
 	
 	// TODO: Make the extension modifiable
-	private static StringProperty defaultScreenshotExtension = PathPrefs.createPersistentPreference("defaultScreenshotExtension", "png");
-	
+	private static StringProperty defaultScreenshotExtension = PathPrefs.createPersistentPreference("defaultScreenshotExtension", "*.png");
+
+	private static File lastSnapshotDirectory = null;
 	
 	/**
 	 * Save an image snapshot, prompting the user to select the output file.
@@ -841,26 +864,62 @@ public class Commands {
 	 * @return true if a snapshot was saved, false otherwise
 	 */
 	public static boolean saveSnapshot(QuPathGUI qupath, GuiTools.SnapshotType type) {
-		BufferedImage img = GuiTools.makeSnapshot(qupath, type);			
-		
+		BufferedImage img = GuiTools.makeSnapshot(qupath, type);
+
 		String ext = defaultScreenshotExtension.get();
 		List<ImageWriter<BufferedImage>> compatibleWriters = ImageWriterTools.getCompatibleWriters(BufferedImage.class, ext);
 		if (compatibleWriters.isEmpty()) {
 			logger.error("No compatible image writers found for extension: " + ext);
 			return false;
 		}
-		
-		File fileOutput = FileChoosers.buildFileChooser()
-				.extensionFilter("Screenshot", ext)
-				.build()
-				.showOpenDialog(qupath.getStage());
+
+		List<FileChooser.ExtensionFilter> extensionFilters = new ArrayList<>(Arrays.asList(
+				FileChoosers.createExtensionFilter("PNG", "png"),
+				FileChoosers.createExtensionFilter("JPEG", "jpg", "jpeg"),
+				FileChoosers.createExtensionFilter("TIFF", "tif", "tiff")
+		));
+		FileChooser.ExtensionFilter selectedFilter = extensionFilters
+				.stream()
+				.filter(e -> e.getExtensions().contains(ext))
+				.findFirst()
+				.orElse(extensionFilters.get(0));
+		if (!Objects.equals(selectedFilter, extensionFilters.get(0))) {
+			extensionFilters.remove(selectedFilter);
+			extensionFilters.add(0, selectedFilter);
+		}
+
+		// Choose a suitable initial directory
+		var initialDirectory = lastSnapshotDirectory;
+		if (initialDirectory == null || !initialDirectory.exists()) {
+			var project = qupath.getProject();
+			if (project != null) {
+				var path = project.getPath();
+				if (path != null) {
+					if (Files.isDirectory(path))
+						initialDirectory = path.toFile();
+					else if (Files.isRegularFile(path))
+						initialDirectory = path.getParent().toFile();
+				}
+			}
+		}
+
+		var chooser = FileChoosers.buildFileChooser()
+				.extensionFilters(extensionFilters)
+				.selectedExtensionFilter(selectedFilter)
+				.initialDirectory(initialDirectory)
+				.build();
+
+		File fileOutput = chooser.showSaveDialog(qupath.getStage());
 		if (fileOutput == null)
 			return false;
-		
+		lastSnapshotDirectory = fileOutput.getParentFile();
+
 		// Loop through the writers and stop when we are successful
 		for (var writer : compatibleWriters) {
 			try {
 				writer.writeImage(img, fileOutput.getAbsolutePath());
+				String extChosen = chooser.getSelectedExtensionFilter().getExtensions().get(0);
+				defaultScreenshotExtension.set(extChosen);
 				return true;
 			} catch (Exception e) {
 				logger.error("Error saving snapshot " + type + " to " + fileOutput.getAbsolutePath(), e);
@@ -1331,6 +1390,8 @@ public class Commands {
 	 */
 	public static void launchTMADataViewer(QuPathGUI qupath) {
 		Stage stage = new Stage();
+		stage.setMinHeight(200);
+		stage.setMinWidth(200);
 		if (qupath != null)
 			stage.initOwner(qupath.getStage());
 		TMASummaryViewer tmaViewer = new TMASummaryViewer(stage);
@@ -1876,6 +1937,8 @@ public class Commands {
 	public static Stage createWorkflowDisplayDialog(QuPathGUI qupath) {
 		var view = new WorkflowCommandLogView(qupath);
 		Stage dialog = new Stage();
+		dialog.setMinHeight(200);
+		dialog.setMinWidth(200);
 		dialog.initOwner(qupath.getStage());
 		dialog.setTitle("Workflow viewer");
 		Pane pane = view.getPane();

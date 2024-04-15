@@ -59,12 +59,14 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.scene.input.MouseEvent;
+import qupath.fx.prefs.controlsfx.PropertySheetUtils;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.prefs.PathPrefs;
-import qupath.lib.gui.prefs.annotations.BooleanPref;
-import qupath.lib.gui.prefs.annotations.DoublePref;
-import qupath.lib.gui.prefs.annotations.Pref;
-import qupath.lib.gui.prefs.annotations.PrefCategory;
+import qupath.fx.prefs.annotations.BooleanPref;
+import qupath.fx.prefs.annotations.DoublePref;
+import qupath.fx.prefs.annotations.Pref;
+import qupath.fx.prefs.annotations.PrefCategory;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.overlays.HierarchyOverlay;
 import qupath.lib.gui.viewer.overlays.PathOverlay;
@@ -136,9 +138,6 @@ public class WandToolEventHandler extends BrushToolEventHandler {
 	}
 
 	
-	/**
-	 * Paint overlays and allow them to influence the want
-	 */
 	private static BooleanProperty wandUseOverlays = PathPrefs.createPersistentPreference("wandUseOverlays", true);
 
 	/**
@@ -170,9 +169,6 @@ public class WandToolEventHandler extends BrushToolEventHandler {
 		
 		
 	
-	/**
-	 * Sigma value associated with Wand tool smoothing
-	 */
 	private static DoubleProperty wandSigmaPixels = PathPrefs.createPersistentPreference("wandSigmaPixels", 4.0);
 
 	/**
@@ -245,7 +241,10 @@ public class WandToolEventHandler extends BrushToolEventHandler {
 			return;
 		}
 		// Add preference to adjust Wand tool behavior
-		qupath.getPreferencePane().addAnnotatedProperties(new WandPreferences());
+		qupath.getPreferencePane()
+				.getPropertySheet()
+				.getItems()
+				.addAll(PropertySheetUtils.parseAnnotatedItemsWithResources(QuPathResources.getLocalizedResourceManager(), new WandPreferences()));
 	}
 	
 	

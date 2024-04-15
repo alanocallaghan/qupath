@@ -1,3 +1,7 @@
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.7.0' // to download if needed
+}
+
 gradle.ext.qupathVersion = "0.5.0-SNAPSHOT"
 
 rootProject.name = 'qupath'
@@ -19,14 +23,19 @@ include 'qupath-extension-script-editor'
 include 'qupath-extension-openslide'
 include 'qupath-extension-bioformats'
 
-includeFlat 'qupath-extension-wsinfer'
 includeFlat 'qupath-extension-scripting'
-includeFlat 'qupath-script-editor'
-include 'script-editor'
-project(":script-editor").projectDir = new File("../qupath-script-editor/script-editor")
-include 'script-editor-api'
-project(":script-editor-api").projectDir = new File("../qupath-script-editor/script-editor-api")
-include 'script-editor-ace'
-project(":script-editor-ace").projectDir = new File("../qupath-script-editor/script-editor-ace")
-include 'script-editor-engines'
-project(":script-editor-engines").projectDir = new File("../qupath-script-editor/script-editor-engines")
+
+
+// Support JavaFX dependency override
+// This can be used to create a build for older versions of macOS
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs {
+            def javafxOverride = System.properties.getOrDefault('javafx-version', null)
+            if (javafxOverride) {
+                println "Overriding JavaFX version to request $javafxOverride"
+                version('javafx', javafxOverride)
+            }
+        }
+    }
+}

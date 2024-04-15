@@ -1,3 +1,24 @@
+/*-
+ * #%L
+ * This file is part of QuPath.
+ * %%
+ * Copyright (C) 2023 QuPath developers, The University of Edinburgh
+ * %%
+ * QuPath is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * QuPath is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with QuPath.  If not, see <https://www.gnu.org/licenses/>.
+ * #L%
+ */
+
 package qupath.lib.gui.actions.menus;
 
 import static qupath.lib.gui.actions.ActionTools.createAction;
@@ -127,7 +148,6 @@ public class ViewMenuActions implements MenuActions {
 		public final Action SEP_7 = ActionTools.createSeparator();
 		
 		@ActionConfig("Action.View.inputDisplay")
-		@ActionAccelerator("shortcut+shift+i")
 		public final Action INPUT_DISPLAY = ActionTools.createSelectableCommandAction(qupath.showInputDisplayProperty());
 
 		@ActionConfig("Action.View.memoryMonitor")
@@ -142,14 +162,18 @@ public class ViewMenuActions implements MenuActions {
 		public final MultitouchActions multitouchActions = new MultitouchActions();
 
 	}
-	
-	
-	
-	public class MultiviewActions {
-		
-		public final Action MULTIVIEW_SYNCHRONIZE_VIEWERS = viewerActions.TOGGLE_SYNCHRONIZE_VIEWERS;
-		
-		public final Action MULTIVIEW_MATCH_RESOLUTIONS = viewerActions.MATCH_VIEWER_RESOLUTIONS;
+
+	public class MultiviewGridActions {
+
+		public final Action MULTIVIEW_GRID_1x1 = viewerActions.VIEWER_GRID_1x1;
+
+		public final Action MULTIVIEW_GRID_1x2 = viewerActions.VIEWER_GRID_1x2;
+
+		public final Action MULTIVIEW_GRID_2x1 = viewerActions.VIEWER_GRID_2x1;
+
+		public final Action MULTIVIEW_GRID_2x2 = viewerActions.VIEWER_GRID_2x2;
+
+		public final Action MULTIVIEW_GRID_3x3 = viewerActions.VIEWER_GRID_3x3;
 
 		public final Action SEP_00 = ActionTools.createSeparator();
 
@@ -160,7 +184,7 @@ public class ViewMenuActions implements MenuActions {
 		public final Action MULTIVIEW_ADD_COLUMN = qupath.createViewerAction(viewer -> qupath.getViewerManager().addColumn(viewer));
 
 		public final Action SEP_01 = ActionTools.createSeparator();
-		
+
 		@ActionConfig("Action.View.Multiview.removeRow")
 		public final Action MULTIVIEW_REMOVE_ROW = qupath.createViewerAction(viewer -> qupath.getViewerManager().removeRow(viewer));
 
@@ -170,13 +194,35 @@ public class ViewMenuActions implements MenuActions {
 		public final Action SEP_02 = ActionTools.createSeparator();
 
 		@ActionConfig("Action.View.Multiview.resetGridSize")
-		public final Action MULTIVIEW_RESET_GRID = qupath.createViewerAction(viewer -> qupath.getViewerManager().resetGridSize());		
+		public final Action MULTIVIEW_RESET_GRID = qupath.createViewerAction(viewer -> qupath.getViewerManager().resetGridSize());
+
+	}
+	
+	public class MultiviewActions {
+
+		@ActionMenu("Action.View.Multiview.gridMenu")
+		public final MultiviewGridActions MULTIVIEW_GRID_ACTIONS = new MultiviewGridActions();
+
+		public final Action SEP_00 = ActionTools.createSeparator();
+
+		public final Action MULTIVIEW_SYNCHRONIZE_VIEWERS = viewerActions.TOGGLE_SYNCHRONIZE_VIEWERS;
 		
-		public final Action SEP_03 = ActionTools.createSeparator();
-		
+		public final Action MULTIVIEW_MATCH_RESOLUTIONS = viewerActions.MATCH_VIEWER_RESOLUTIONS;
+
+		public final Action SEP_01 = ActionTools.createSeparator();
+
 		@ActionConfig("Action.View.Multiview.closeViewer")
 		public final Action MULTIVIEW_CLOSE_VIEWER = qupath.createViewerAction(viewer -> qupath.closeViewer(viewer));
-		
+
+		public final Action SEP_02 = ActionTools.createSeparator();
+
+		// Refined here to take the active viewer from QuPath itself
+		@ActionConfig("ViewerActions.detachViewer")
+		public final Action DETACH_VIEWER = qupath.createViewerAction(viewer -> qupath.getViewerManager().detachViewerFromGrid(viewer));
+
+		@ActionConfig("ViewerActions.attachViewer")
+		public final Action ATTACH_VIEWER = qupath.createViewerAction(viewer -> qupath.getViewerManager().attachViewerToGrid(viewer));
+
 	}
 	
 	

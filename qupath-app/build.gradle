@@ -19,11 +19,13 @@ buildscript {
 }
 
 plugins {
+    id 'org.gradle.crypto.checksum' version '1.4.0'
     id 'qupath.common-conventions'
     id 'qupath.djl-conventions'
     id 'application'
     alias(libs.plugins.license.report)
     alias(libs.plugins.jpackage)
+    alias(libs.plugins.javafx)
 }
 
 
@@ -47,6 +49,18 @@ ext {
     qupathAppName = "QuPath-${qupathVersion}"
 }
 
+// Required since moving to JavaFX Gradle Plugin v0.1.0
+javafx {
+    version = libs.versions.javafx.get()
+    modules = ["javafx.base",
+               "javafx.controls",
+               "javafx.graphics",
+               "javafx.media",
+               "javafx.fxml",
+               "javafx.web",
+               "javafx.swing"]
+}
+
 // Determine java version associated with toolchain
 def toolchainJavaVersion = getToolchainJavaVersion()
 
@@ -57,6 +71,11 @@ application {
     mainClass = "qupath.QuPath"
     applicationName = qupathAppName
     applicationDefaultJvmArgs = buildDefaultJvmArgs("${rootProject.buildDir}/natives", toolchainJavaVersion)
+
+    // Necessary when using ./gradlew run to support style manager to change themes
+    applicationDefaultJvmArgs << '--add-opens'
+    applicationDefaultJvmArgs << 'javafx.graphics/com.sun.javafx.css=ALL-UNNAMED'
+
 }
 
 /**
@@ -74,27 +93,6 @@ afterEvaluate {
     }
 }
 
-/**
- * Create a start script that sets LD_LIBRARY_PATH for Linux builds.
- * This can (sometimes) help get OpenSlide working properly.
- */
-ext {
-    setLdLibraryPath = false
-}
-
-tasks.register('checkLdLibrary') {
-    doLast {
-        if (project.properties['platform.name'] == 'linux') {
-            if (rootProject.properties['ld-path']) {
-                println "Setting LD_LIBRARY_PATH"
-                setLdLibraryPath = true
-            } else {
-                println "If you experience OpenSlide issues, try './gradlew run -Pld-path=true' to set LD_LIBRARY_PATH"
-            }
-        }
-    }
-}
-
 startScripts {
     doLast {
         // Update library path
@@ -102,14 +100,6 @@ startScripts {
         def newPath = '$APP_HOME/lib'
         unixScript.text = unixScript.text.replace(currentPath, newPath)
         windowsScript.text = unixScript.text.replace(currentPath, newPath)
-
-        // If required, set LD_LIBRARY_PATH for Linux
-        if (setLdLibraryPath) {
-            println 'Setting LD_LIBRARY_PATH in start script'
-            def oldCmd = 'exec "$JAVACMD" "$@"'
-            def newCmd = 'export LD_LIBRARY_PATH="$APP_HOME/lib"' + System.lineSeparator() + oldCmd
-            unixScript.text = unixScript.text.replace(oldCmd, newCmd)
-        }
     }
 }
 
@@ -165,11 +155,8 @@ task mergedJavadocJar(type: Jar, dependsOn: rootProject.tasks.mergedJavadocs) {
  */
 extractNatives.mustRunAfter(allprojects.tasks.clean)
 compileJava.dependsOn(extractNatives)
-run.dependsOn(checkLdLibrary)
-startScripts.dependsOn(checkLdLibrary)
 jpackage.dependsOn(extractNatives)
 jpackage.dependsOn(mergedJavadocJar)
-jpackage.dependsOn(checkLdLibrary)
 
 /**
  * Create license report
@@ -182,6 +169,13 @@ licenseReport {
 //               new CsvReportRenderer(),
                  new InventoryHtmlReportRenderer('index.html', 'Third party licenses', fileUnknown)]
     outputDir = "${rootProject.buildDir}/reports/dependency-license"
+
+    // TODO: Try to remove this. It's needed (I think) due to the license plugin not supporting
+    //       Gradle variants, as required by the JavaFX Gradle Plugin v0.1.0. Possibly-relevant links:
+    //       - https://github.com/openjfx/javafx-gradle-plugin#variants
+    //       - https://github.com/jk1/Gradle-License-Report/issues/199
+    //       The JavaFX license is still included in QuPath, but unfortunately not in this report.
+    excludeGroups = ['org.openjfx']
 }
 tasks.startScripts.dependsOn("generateLicenseReport")
 
@@ -235,6 +229,7 @@ distZip {
     enabled = false
 }
 
+
 /**
  * Create Java Runtime & call jpackage
  */
@@ -260,7 +255,7 @@ runtime {
             'java.net.http',        // Add HttpClient support (may be used by scripts)
             'java.management',      // Useful to check memory usage
             'jdk.management.agent', // Enables VisualVM to connect and sample CPU use
-            'jdk.jsobject'          // Needed to interact with WebView through JSObject
+            'jdk.jsobject',         // Needed to interact with WebView through JSObject
     ]
 
     def params = buildParameters()
@@ -288,9 +283,157 @@ runtime {
             installerOutputDir = params.outputDir
         }
     }
-
 }
 
+// Removed - this was much more trouble than it was worth, causing file permissions issues
+// that were only evident after downloading & installing (building locally was ok).
+// jpackage in Java 20 also seemed to pick up on the plist changes and wasn't pleased.
+///**
+// * Fix the version on macOS - see https://github.com/qupath/qupath/issues/1250
+// * @param appFile
+// * @return
+// */
+//def fixMacOSVersion(File appFile) {
+//    def plistFile = new File("${appFile.getCanonicalPath()}/Contents/Info.plist")
+//    def versionToInclude = getNonSnapshotVersion()
+//    if (plistFile.exists()) {
+//        // Update the plist with the 'correct' version (since jpackage blocks anything before 1.x.x)
+//        String path = plistFile.getCanonicalPath()
+//        println "Setting CFBundleVersion to ${versionToInclude}"
+//        exec {
+//            commandLine '/usr/libexec/PlistBuddy', '-c', "Set :CFBundleVersion ${versionToInclude}", path
+//        }
+//        println "Setting CFBundleShortVersionString to ${qupathVersion}"
+//        exec {
+//            commandLine '/usr/libexec/PlistBuddy', '-c', "Set :CFBundleShortVersionString ${qupathVersion}", path
+//        }
+//        // We want an identifier that is unique to the major/minor version, but can exclude the patch
+//        // We expect that users may want to keep multiple versions of QuPath installed for reproducibility,
+//        // but making all patch versions uniquely identifiable may make encouraging updates more difficult.
+//        String majorMinorVersion = versionToInclude
+//        String[] parts = majorMinorVersion.split("\\.")
+//        if (parts.length > 2)
+//            majorMinorVersion = parts[0] + "." + parts[1]
+//        String bundleId = "qupath-${majorMinorVersion}"
+//        println "Setting CFBundleIdentifier to ${bundleId}"
+//        exec {
+//            commandLine '/usr/libexec/PlistBuddy', '-c', "Set :CFBundleIdentifier ${bundleId}", path
+//        }
+//    }
+//}
+
+/**
+ * Build a .pkg for an existing .app on macOS.
+ * This is a separate task because it needs to be run after the Info.plist has been updated.
+ * @param appFile
+ * @return
+ */
+def makeMacOSPkg(File appFile) {
+    exec {
+        workingDir appFile.getParentFile()
+        commandLine 'jpackage',
+                '-n', 'QuPath',
+                '--app-image', appFile.getCanonicalPath(),
+                '--type', 'pkg',
+//                '--mac-package-identifier', 'qupath',
+                '--app-version', qupathVersion
+    }
+}
+
+/**
+ * Postprocessing of jpackage outputs; this is needed to fix the macOS version
+ * and assemble the outputs for the checksums.
+ */
+tasks.register('jpackageFinalize') {
+    doLast {
+        def outputDir = new File("${rootProject.layout.buildDirectory.get()}")
+        // Loop for Mac things to do
+        def appFile = new File(outputDir, "/dist/${getCorrectAppName('.app')}")
+        if (appFile.exists()) {
+//            fixMacOSVersion(appFile)
+            // We need to make the macOS pkg here to incorporate the changes
+            if (findProperty('package')?.toLowerCase() in ['installer', 'pkg']) {
+                println "Creating pkg"
+                makeMacOSPkg(appFile)
+                // Ensure we haven't accidentally changed the name
+                def file = new File(appFile.getParentFile(), "QuPath-${qupathVersion}.pkg")
+                String correctName = getCorrectAppName('.pkg')
+                if (file.exists() && !file.name.equals(correctName)) {
+                    file.renameTo(new File(file.getParent(), correctName))
+                }
+                // Remove the .app as it's no longer needed (and just takes up space)
+                println "Deleting " + appFile
+                delete appFile
+            }
+        }
+        // On windows, for the installer we should also zip up the image
+        if (project.properties['platform.name'] == 'windows') {
+            def imageDir = new File(outputDir, "/dist/${qupathAppName}")
+            if (imageDir.isDirectory() && findProperty('package')?.toLowerCase() in ['installer']) {
+                println "Zipping $imageDir"
+                ant.zip(destfile: new File(imageDir.getCanonicalPath() + ".zip")) {
+                    fileset(dir: imageDir.getCanonicalPath()) {
+                    }
+                }
+                // Ideally we'd delete here, but it often fails
+//                try {
+//                    delete imageDir
+//                } catch (IOException e) {
+//                    println "Exception trying to delete image: ${e.message}"
+//                }
+            }
+        }
+    }
+    // Identify outputs, which are used to create checksums
+    inputs.files jpackage.outputs.files
+    outputs.files(jpackage.outputs.files.asFileTree.matching {
+        // I think you can tell I'm not great with Gradle
+        include {
+            return it.file.parentFile.name == 'dist' &&
+                    it.name.startsWith('QuPath') &&
+                    !it.name.endsWith('.sha512') &&
+                    !it.name.endsWith('.sha256') &&
+                    !it.name.endsWith('.sha384')
+        }
+    })
+}
+
+// We may need to fix the version on Mac
+jpackage.configure {
+    finalizedBy jpackageFinalize
+}
+
+
+/**
+ * Create SHA512 checksums of JPackage outputs
+ */
+task createChecksums(type: org.gradle.crypto.checksum.Checksum, dependsOn: jpackage) {
+    def params = buildParameters()
+    inputFiles.setFrom(jpackageFinalize.outputs)
+    outputDirectory.set(params.outputDir)
+    checksumAlgorithm.set(org.gradle.crypto.checksum.Checksum.Algorithm.SHA512)
+    appendFileNameToChecksum.set(true)
+}
+
+/**
+ * Get the name we want to use for the app.
+ * On macOS, we want to append the architecture to make it easier to install both
+ * the x64 and ARM versions on the same machine.
+ * @param ext
+ * @return
+ */
+String getCorrectAppName(String ext) {
+    String baseName = qupathAppName
+    if (ext == '.app' || ext == '.pkg') {
+        if (!baseName.contains('-arm64') && !baseName.contains('-x64')) {
+            if (System.properties['os.arch'] == 'aarch64')
+                baseName = "${baseName}-arm64"
+            else
+                baseName = "${baseName}-x64"
+        }
+    }
+    return "${baseName}${ext}"
+}
 
 /**
  * Try to resolve annoying macOS/Windows renaming with an invalid version
@@ -306,16 +449,9 @@ jpackage {
                 for (ext in extensions) {
                     if (!f.name.endsWith(ext))
                         continue
-                    String correctName = "${qupathAppName}${ext}"
+                    String correctName = getCorrectAppName(ext)
                     if (!f.name.equals(correctName))
                         f.renameTo(new File(f.getParent(), correctName))
-                }
-
-                // Create a launch script including LD_LIBRARY_PATH for Linux
-                if (isLinux && f.isDirectory() && new File(f, "bin").exists()) {
-                    def fileLaunch = new File(f.getAbsolutePath() + "/bin/QuPath.sh")
-                    println "Generating launch script at $fileLaunch"
-                    fileLaunch.text = createLaunchScript()
                 }
             }
         }
@@ -360,11 +496,19 @@ class JPackageParams {
 }
 
 /**
+ * Get the version, with any 'SNAPSHOT' element removed
+ * @return
+ */
+String getNonSnapshotVersion() {
+    qupathVersion.replace('-SNAPSHOT', '')
+}
+
+/**
  * Build default parameters for jpackage, customizing these according to the current platform
  * @return
  */
 JPackageParams buildParameters() {
-    String appVersion = qupathVersion.replace('-SNAPSHOT', '')
+    String appVersion = getNonSnapshotVersion()
 
     def params = new JPackageParams()
     params.mainJar = project.jar.getArchiveFileName().get()
@@ -407,7 +551,8 @@ JPackageParams buildParameters() {
 void updatePackageType(JPackageParams params, String... defaultInstallers) {
     // Define platform-specific jpackage configuration options
     def packageType = findProperty('package')?.toLowerCase()
-    if (!packageType || ['image', 'app-image'].contains(packageType)) {
+    if (!packageType || ['image', 'app-image'].contains(packageType) || project.properties['platform.name'] == 'macosx') {
+        // We can't make installers directly on macOS - need to base them on an image
         params.skipInstaller = true
         params.installerTypes = [null]
         logger.info("No package type specified, using default ${packageType}")
@@ -463,8 +608,8 @@ def configureJPackageMac(JPackageParams params) {
     updatePackageType(params, properties['platform.installerExt'])
 
     params.installerOptions += ['--mac-package-name', 'QuPath']
-    params.installerOptions += ['--mac-package-identifier', 'QuPath']
-    params.installerOptions += ['--mac-package-identifier', 'QuPath']
+    // Need to include the version so that we can have multiple versions installed
+    params.installerOptions += ['--mac-package-identifier', "QuPath-${qupathVersion}"]
 
     // File associations supported on Mac
     setFileAssociations(params)
@@ -472,8 +617,10 @@ def configureJPackageMac(JPackageParams params) {
     // Can't have any -SNAPSHOT or similar added
     params.appVersion = stripVersionSuffix(params.appVersion)
 
-    params.imageName = 'QuPath'
-    params.installerName = 'QuPath'
+    params.imageName = getCorrectAppName(".app")
+    if (params.imageName.endsWith(".app"))
+        params.imageName = params.imageName.substring(0, params.imageName.length() - 4)
+    params.installerName = getCorrectAppName(".pkg")
 
     // Sadly, on a Mac we can't have an appVersion that starts with 0
     // See https://github.com/openjdk/jdk/blob/jdk-16+36/src/jdk.jpackage/macosx/classes/jdk/jpackage/internal/CFBundleVersion.java
@@ -543,6 +690,7 @@ JavaVersion getToolchainJavaVersion() {
 
 /**
  * Get default JVM arguments (e.g. to set memory, library path)
+ * Java version not currently used.
  * @return
  */
 static List<String> buildDefaultJvmArgs(String libraryPath = '$APPDIR', JavaVersion javaVersion = JavaVersion.current()) {
@@ -553,36 +701,8 @@ static List<String> buildDefaultJvmArgs(String libraryPath = '$APPDIR', JavaVers
     if (libraryPath != null)
         javaOptions << "-Djava.library.path=${libraryPath}"
 
-    // Revert to pre-Java-16 behavior
-    // See https://openjdk.java.net/jeps/396
-    // If this is removed, things like adding metadata to a project entry will fail with errors such as
-    //   ERROR: QuPath exception: class org.controlsfx.control.textfield.AutoCompletionBinding
-    //   (in unnamed module @0x298a5e20) cannot access class com.sun.javafx.event.EventHandlerManager
-    //   (in module javafx.base) because module javafx.base does not export com.sun.javafx.event to unnamed module
-    // This Java option is not supported in Java 17+.
-    // It is useful in Java 16, particularly for Bio-Formats memoization
-    if (javaVersion == JavaVersion.VERSION_16) {
-        println "Setting --illegal-access=permit for pre-Java 16 behavior"
-        javaOptions << '--illegal-access=permit'
-    }
-
     // Default to using 50% available memory
     javaOptions << '-XX:MaxRAMPercentage=50'
 
     return javaOptions
-}
-
-
-/**
- * Create a bash script that can be used to launch QuPath on Linux.
- * The purpose is to set LD_LIBRARY_PATH to use the local OpenSlide.
- * When not using this, other shared libraries are likely to be used instead.
- */
-static String createLaunchScript() {
-    return """#!/bin/bash
-	        	
-DIR="\$( cd "\$( dirname "\${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-export LD_LIBRARY_PATH="\$DIR/../lib/app/"
-"\$DIR/QuPath" "\$@"
-"""
 }

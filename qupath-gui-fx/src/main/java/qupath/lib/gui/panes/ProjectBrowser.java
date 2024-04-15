@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -42,10 +43,13 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import javafx.beans.property.SimpleObjectProperty;
 import org.controlsfx.control.MasterDetailPane;
 import org.controlsfx.control.action.Action;
 import org.controlsfx.control.action.ActionUtils;
@@ -92,6 +96,8 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
+import qupath.fx.controls.PredicateTextField;
+import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.common.ThreadTools;
 import qupath.lib.gui.QuPathGUI;
@@ -140,8 +146,9 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 	private Set<ProjectTreeRow> serversFailed = Collections.synchronizedSet(new HashSet<>());
 	
 	private StringProperty descriptionText = new SimpleStringProperty();
-	
-	private static TextField tfFilter;
+
+	// Predicate for filtering tree rows
+	private ObjectProperty<Predicate<String>> predicateProperty = new SimpleObjectProperty<>(s -> true);
 
 	private static ObjectProperty<ProjectThumbnailSize> thumbnailSize = PathPrefs.createPersistentPreference("projectThumbnailSize",
 			ProjectThumbnailSize.SMALL, ProjectThumbnailSize.class);
@@ -152,11 +159,27 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 	/**
 	 * Metadata keys that will always be present
 	 */
-	private static final String URI = "URI";
+	private enum BaseMetadataKeys {
+		IMAGE_NAME("Image name"), ENTRY_ID("Entry ID"), URI("URI");
+
+		private final String displayName;
+
+		BaseMetadataKeys(String displayName) {
+			this.displayName = displayName;
+		}
+
+		String getDisplayName() {
+			return displayName;
+		}
+
+		String getKey() {
+			return "SORT_KEY[" + toString() + "]";
+		}
+
+	}
 	private static final String UNASSIGNED_NODE = "(Unassigned)";
 	private static final String UNDEFINED_VALUE = "Undefined";
-	private static String[] baseMetadataKeys = new String[] {URI};
-	
+
 	/**
 	 * To load thumbnails in the background
 	 */
@@ -222,10 +245,13 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 		titledTree.setMaxHeight(Double.MAX_VALUE);
 		
 		
-		tfFilter = new TextField();
+		var tfFilter = new PredicateTextField<String>();
 		tfFilter.setPromptText("Search entry in project");
-		tfFilter.setTooltip(new Tooltip("Type some text to filter the project entries by name or type."));
-		tfFilter.textProperty().addListener((m, o, n) -> refreshTree(null));
+		tfFilter.setSpacing(0.0);
+		var tooltip = new Tooltip("Type some text to filter the project entries by name or type.");
+		Tooltip.install(tfFilter, tooltip);
+		predicateProperty.bind(tfFilter.predicateProperty());
+		predicateProperty.addListener((m, o, n) -> refreshTree(null));
 		
 		var paneUserFilter = GridPaneUtils.createRowGrid(tfFilter);
 		
@@ -242,11 +268,16 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 		paneButtons.prefWidthProperty().bind(panel.widthProperty());
 		paneButtons.setPadding(new Insets(5, 5, 5, 5));
 		panel.setTop(paneButtons);
-		
-		qupath.getPreferencePane().addChoicePropertyPreference(
-				thumbnailSize, FXCollections.observableArrayList(ProjectThumbnailSize.values()), ProjectThumbnailSize.class,
-				"Project thumbnails size", "Appearance", "Choose thumbnail size for the project pane");
 
+		qupath.getPreferencePane().getPropertySheet().getItems().add(
+				new PropertyItemBuilder<>(thumbnailSize, ProjectThumbnailSize.class)
+						.propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+						.name("Project thumbnail size")
+						.category("Appearance")
+						.choices(Arrays.asList(ProjectThumbnailSize.values()))
+						.description("Choose thumbnail size for the project pane")
+						.build()
+		);
 	}
 
 	ContextMenu getPopup() {
@@ -484,17 +515,17 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 		Action actionOpenImageServerDirectory = createBrowsePathAction("Image...", () -> getImageServerPath());
 		
 
-		Menu menuSort = new Menu("Sort by...");
 		ContextMenu menu = new ContextMenu();
 		
 		var hasProjectBinding = qupath.projectProperty().isNotNull();
-		var menuOpenDirectories = MenuTools.createMenu("Open directory...", 
+		var menuOpenDirectories = MenuTools.createMenu("Open directory...",
 				actionOpenProjectDirectory,
 				actionOpenProjectEntryDirectory,
 				actionOpenImageServerDirectory);
-		menuOpenDirectories.visibleProperty().bind(hasProjectBinding);
-//		MenuItem miOpenProjectDirectory = ActionUtils.createMenuItem(actionOpenProjectDirectory);
-		
+//		menuOpenDirectories.visibleProperty().bind(hasProjectBinding);
+		var separatorOpenDirectories = new SeparatorMenuItem();
+		separatorOpenDirectories.visibleProperty().bind(menuOpenDirectories.visibleProperty());
+
 		MenuItem miOpenImage = ActionUtils.createMenuItem(actionOpenImage);
 		MenuItem miRemoveImage = ActionUtils.createMenuItem(actionRemoveImage);
 		MenuItem miDuplicateImage = ActionUtils.createMenuItem(actionDuplicateImages);
@@ -503,14 +534,18 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 		MenuItem miEditDescription = ActionUtils.createMenuItem(actionEditDescription);
 		MenuItem miAddMetadata = ActionUtils.createMenuItem(actionAddMetadataValue);
 		MenuItem miMaskImages = ActionUtils.createCheckMenuItem(actionMaskImageNames);
-		
-		
+
+		// Create menu for sorting by metadata
+		Menu menuSort = new Menu("Sort by...");
+
 		// Set visibility as menu being displayed
 		menu.setOnShowing(e -> {
 			TreeItem<ProjectTreeRow> selected = tree.getSelectionModel().getSelectedItem();
 			ProjectImageEntry<BufferedImage> selectedEntry = selected == null ? null : ProjectTreeRow.getEntry(selected.getValue());
 			var entries = getSelectedImageRowsRecursive();
 			boolean isImageEntry = selectedEntry != null;
+
+			populateSortByMenu(menuSort);
 			
 			int nSelectedEntries = ProjectTreeRow.getEntries(entries).size();
 			if (nSelectedEntries == 1) {
@@ -529,31 +564,17 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 			miEditDescription.setVisible(isImageEntry);
 			miRefreshThumbnail.setVisible(isImageEntry && isCurrentImage(selectedEntry));
 			miRemoveImage.setVisible(selected != null && project != null && !project.getImageList().isEmpty());
-			
+
 			if (project == null) {
 				menuSort.setVisible(false);
 				return;
 			}
-			Map<String, MenuItem> newItems = new TreeMap<>();
-			for (ProjectImageEntry<?> entry : project.getImageList()) {
-				// Add all entry metadata keys
-				for (String key : entry.getMetadataKeys()) {
-					if (!newItems.containsKey(key))
-						newItems.put(key, ActionUtils.createMenuItem(createSortByKeyAction(key, key)));
-				}
-				// Add all additional keys
-				for (String key : baseMetadataKeys) {
-					if (!newItems.containsKey(key))
-						newItems.put(key, ActionUtils.createMenuItem(createSortByKeyAction(key, key)));
-				}
-			}
-			menuSort.getItems().setAll(newItems.values());
-			
-			menuSort.getItems().add(0, ActionUtils.createMenuItem(createSortByKeyAction("None", null)));
-			menuSort.getItems().add(1, new SeparatorMenuItem());
-			
+
 			menuSort.setVisible(true);
-			
+
+			// Handle opening directories - requires Desktop
+			menuOpenDirectories.setVisible(Desktop.isDesktopSupported() && hasProjectBinding.get());
+
 			if (menu.getItems().isEmpty())
 				e.consume();
 		});
@@ -571,21 +592,47 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 				miMaskImages,
 				miRefreshThumbnail,
 				separator,
-				menuSort
+				menuSort,
+				separatorOpenDirectories,
+				menuOpenDirectories
 				);
-		
-		separator = new SeparatorMenuItem();
-		separator.visibleProperty().bind(menuOpenDirectories.visibleProperty());
-		if (Desktop.isDesktopSupported()) {
-			menu.getItems().addAll(
-					separator,
-					menuOpenDirectories);
-		}
-		
+
 		contextMenuShowing.bind(menu.showingProperty());
 		
 		return menu;
 	}
+
+
+	/**
+	 * Populate the 'Sort by...' menu, recreating values if necessary
+	 * @param menuSort
+	 * @return
+	 */
+	private Menu populateSortByMenu(Menu menuSort) {
+		Map<String, MenuItem> newItems = new TreeMap<>();
+		if (project != null) {
+			for (ProjectImageEntry<?> entry : project.getImageList()) {
+				// Add all entry metadata keys
+				for (String key : entry.getMetadataKeys()) {
+					if (!newItems.containsKey(key))
+						newItems.put(key, ActionUtils.createMenuItem(createSortByKeyAction(key, key)));
+				}
+			}
+		}
+		menuSort.getItems().setAll(newItems.values());
+
+		// Add all additional keys
+		for (var key : BaseMetadataKeys.values()) {
+			if (!newItems.containsKey(key.getKey()))
+				menuSort.getItems().add(ActionUtils.createMenuItem(createSortByKeyAction(key.getDisplayName(), key.getKey())));
+		}
+
+		menuSort.getItems().add(0, ActionUtils.createMenuItem(createSortByKeyAction("None", null)));
+		menuSort.getItems().add(1, new SeparatorMenuItem());
+
+		return menuSort;
+	}
+
 	
 	Path getProjectPath() {
 		return project == null ? null : project.getPath();
@@ -643,6 +690,7 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 			return true;
 		} catch (IOException e) {
 			Dialogs.showErrorMessage("Save project", e);
+			logger.error(e.getMessage(), e);
 			return false;
 		}
 	}
@@ -896,7 +944,7 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 	 * @throws IOException 
 	 */
 	private static <T> String getDefaultValue(ProjectImageEntry<T> entry, String key) throws IOException {
-		if (key.equals(URI)) {
+		if (key.equals(BaseMetadataKeys.URI.getKey())) {
 			var URIs = entry.getURIs();
 			var it = URIs.iterator();
 			
@@ -911,6 +959,10 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 				return fullURI.substring(fullURI.lastIndexOf("/")+1, fullURI.length());
 			}
 			return "Multiple URIs";
+		} else if (key.equals(BaseMetadataKeys.IMAGE_NAME.getKey())) {
+			return entry.getImageName();
+		}  else if (key.equals(BaseMetadataKeys.ENTRY_ID.getKey())) {
+			return entry.getID();
 		}
 		var value = entry.getMetadataValue(key);
 		return value == null ? UNASSIGNED_NODE : value;
@@ -1053,7 +1105,7 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 		
 		// If 'mask names' is ticked, shuffle the image list for less biased analyses
 		var imageList = project.getImageList();
-		var indices = IntStream.range(0, imageList.size()).boxed().toList();
+		var indices = IntStream.range(0, imageList.size()).boxed().collect(Collectors.toCollection(ArrayList::new));
 		Collections.shuffle(indices);
 		return indices.stream().map(index -> new ImageRow(imageList.get(index))).toList();
 	}
@@ -1131,10 +1183,12 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 				var children = getTreeItem().getChildren();
 				setText(item.getDisplayableString() + (children.size() > 0 ? " (" + children.size() + ")" : ""));
 				setGraphic(null);
+				// TODO: Extract styles to external CSS
 				setStyle("-fx-font-weight: normal; -fx-font-family: arial");
 				return;
 			} else if (item.getType() == ProjectTreeRow.Type.METADATA) {
 				var children = getTreeItem().getChildren();
+				// TODO: Try not to display count when grouping by ID
 				setText(item.getDisplayableString() + (children.size() > 0 ? " (" + children.size() + ")" : ""));
 				setGraphic(null);
 				setStyle("-fx-font-weight: normal; -fx-font-family: arial");
@@ -1231,7 +1285,7 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 			switch(getValue().getType()) {
 				case ROOT:
 					return project != null && project.getImageList().size() > 0 && !project.getImageList().stream()
-										.filter(entry -> entry.getImageName().toLowerCase().contains(tfFilter.getText().toLowerCase()))
+										.filter(entry -> predicateProperty.get().test(entry.getImageName()))
 										.findAny()
 										.isPresent();
 				case METADATA:
@@ -1248,7 +1302,7 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 		public ObservableList<TreeItem<ProjectTreeRow>> getChildren() {
 			if (!isLeaf() && !computed) {
 				ObservableList<TreeItem<ProjectTreeRow>> children = FXCollections.observableArrayList();
-				var filter = tfFilter.getText().toLowerCase();
+				var filter = predicateProperty.get();
 				var metadataKey = model.getMetadataKey();
 				switch (getValue().getType()) {
 				case ROOT:
@@ -1257,16 +1311,31 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 					
 					if (metadataKey == null) {
 						for (var row: getAllImageRows()) {
-							if (filter != null && !filter.isEmpty() && !row.getDisplayableString().toLowerCase().contains(filter))
+							if (!filter.test(row.getDisplayableString()))
 								continue;
 							children.add(new ProjectTreeRowItem(row));
 						}
 					} else {
 						var values = new ArrayList<>(getAllMetadataValues(metadataKey));
 						GeneralTools.smartStringSort(values);
-						children.addAll(values.stream()
+						var potentialChildren = values.stream()
 								.map(value -> new ProjectTreeRowItem(new MetadataRow(value)))
-								.toList());
+								.toList();
+						// When sorting by name, we don't want to show grouped by name - since it looks weird,
+						// with the name effectively being repeated twice
+						if (metadataKey.equals(BaseMetadataKeys.IMAGE_NAME.getKey()))
+							potentialChildren = potentialChildren.stream().flatMap(c -> {
+								if (c.isLeaf())
+									return Stream.empty();
+								else
+									return c.getChildren().stream();
+							}).map(t -> (ProjectTreeRowItem)t).toList();
+						// When sorting by entry ID, we want to expand everything - since there should only be one
+						// entry per ID
+						if (metadataKey.equals(BaseMetadataKeys.ENTRY_ID.getKey()))
+							potentialChildren.forEach(c -> c.setExpanded(true));
+
+						children.addAll(potentialChildren);
 					}
 					break;
 				case METADATA:
@@ -1274,14 +1343,14 @@ public class ProjectBrowser implements ChangeListener<ImageData<BufferedImage>> 
 						break;
 					
 					for (var row: getAllImageRows()) {
-						if (filter != null && !filter.isEmpty() && !row.getDisplayableString().toLowerCase().contains(filter))
+						if (!filter.test(row.getDisplayableString()))
 							continue;
 						try {
 							var value = getDefaultValue(ProjectTreeRow.getEntry(row), metadataKey);
 							if (value != null && value.equals(((MetadataRow)getValue()).getDisplayableString()))
 								children.add(new ProjectTreeRowItem(row));
 						} catch (IOException ex) {
-							logger.warn("Could not get URIs from: " + row.getDisplayableString(), ex.getLocalizedMessage());
+							logger.warn("Could not get {} from {}", metadataKey, row.getDisplayableString(), ex);
 						}
 					}
 				case IMAGE:

@@ -24,10 +24,12 @@
 
 package qupath.lib.gui;
 
+import java.net.ConnectException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import javafx.beans.property.LongProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +67,9 @@ import qupath.fx.utils.GridPaneUtils;
 class UpdateManager {
 	
 	private static final Logger logger = LoggerFactory.getLogger(UpdateManager.class);
-	
+
+	private static LongProperty lastUpdateCheck = PathPrefs.createPersistentPreference("lastUpdateCheck", -1L);
+
 	private QuPathGUI qupath;
 	
 	private UpdateManager(QuPathGUI qupath) {
@@ -100,7 +104,7 @@ class UpdateManager {
 		// Work through extensions
 		if (updateCheckType == AutoUpdateType.QUPATH_AND_EXTENSIONS || updateCheckType == AutoUpdateType.EXTENSIONS_ONLY) {
 			var extensionManager = qupath.getExtensionManager();
-			for (var ext : extensionManager.getLoadedExtensions()) {
+			for (var ext : extensionManager.getLoadedExtensions().values()) {
 				var v = ext.getVersion();
 				if (!(ext instanceof GitHubProject)) {
 					// This also applies to built-in QuPath extensions
@@ -125,28 +129,36 @@ class UpdateManager {
 		}
 		
 		// Check for any updates
+		int connectErrorCount = 0;
 		for (var entry : projects.entrySet()) {
+			var project = entry.getKey();
+			var version = entry.getValue();
 			try {
-				var project = entry.getKey();
 				logger.info("Update check for {}", project.getUrlString());
-				var release = UpdateChecker.checkForUpdate(entry.getKey());
-				if (release != null && release.getVersion() != Version.UNKNOWN && entry.getValue().compareTo(release.getVersion()) < 0) {
-					logger.info("Found newer release for {} ({} -> {})", project.getName(), entry.getValue(), release.getVersion());
+				var release = UpdateChecker.checkForUpdate(project);
+				if (release != null && release.getVersion() != Version.UNKNOWN && version.compareTo(release.getVersion()) < 0) {
+					logger.info("Found newer release for {} ({} -> {})", project.getName(), version, release.getVersion());
 					projectUpdates.put(project, release);
 				} else if (release != null) {
-					logger.info("No newer release for {} ({} is newer than {})", project.getName(), entry.getValue(), release.getVersion());
+					logger.info("No newer release for {} (current {} vs upstream {})", project.getName(), version, release.getVersion());
 				}
 			} catch (Exception e) {
-				logger.error("Update check failed for {}", entry.getKey());
+				if (e instanceof ConnectException)
+					connectErrorCount++;
+				logger.warn("Update check failed for {}", project);
 				logger.debug(e.getLocalizedMessage(), e);
 			}
 		}
-		PathPrefs.getUserPreferences().putLong("lastUpdateCheck", System.currentTimeMillis());
+		lastUpdateCheck.set(System.currentTimeMillis());
 		
 		// If we couldn't determine the version, tell the user only if this isn't the automatic check
 		if (projectUpdates.isEmpty()) {
-			if (!isAutoCheck)
-				Dialogs.showMessageDialog(title, "No updates found!");
+			if (!isAutoCheck) {
+				if (connectErrorCount == projects.size())
+					Dialogs.showErrorMessage(title, "Unable to check for updates - please check your internet connection");
+				else
+					Dialogs.showMessageDialog(title, "No updates found!");
+			}
 			return;
 		}
 		
@@ -241,8 +253,8 @@ class UpdateManager {
 
 		// Don't run auto-update check again if we already checked within the last hour
 		long currentTime = System.currentTimeMillis();
-		long lastUpdateCheck = PathPrefs.getUserPreferences().getLong("lastUpdateCheck", 0);
-		double diffHours = (double)(currentTime - lastUpdateCheck) / (60L * 60L * 1000L);
+		long lastUpdateCheckMillis = lastUpdateCheck.get();
+		double diffHours = (double)(currentTime - lastUpdateCheckMillis) / (60L * 60L * 1000L);
 		if (diffHours < 12) {
 			logger.debug("Skipping update check (I already checked recently)");
 			return;

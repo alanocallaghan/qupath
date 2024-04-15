@@ -51,7 +51,6 @@ import javafx.scene.text.TextAlignment;
 import javafx.scene.text.TextFlow;
 import javafx.stage.Stage;
 import qupath.fx.utils.FXUtils;
-import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.prefs.PathPrefs.AutoUpdateType;
@@ -74,7 +73,7 @@ public class WelcomeStage {
 	
 	private static Stage INSTANCE;
 	
-	private static final StringProperty TITLE = QuPathResources.getLocalizeResourceManager().createProperty("Welcome.title");
+	private static final StringProperty TITLE = QuPathResources.getLocalizedResourceManager().createProperty("Welcome.title");
 
 	public static Stage getInstance(QuPathGUI qupath) {
 		if (INSTANCE == null) {
@@ -87,7 +86,7 @@ public class WelcomeStage {
 	
 	private static Stage buildStage(QuPathGUI qupath) {
 
-		var localeListener = QuPathResources.getLocalizeResourceManager();
+		var localeListener = QuPathResources.getLocalizedResourceManager();
 
 		var stage = new Stage();
 		if (qupath != null)
@@ -120,7 +119,7 @@ public class WelcomeStage {
 		imageView.setPreserveRatio(true);
 		
 		var textTitle = new Text();
-		QuPathResources.getLocalizeResourceManager().registerProperty(textTitle.textProperty(), "Welcome.welcomeMessage");
+		QuPathResources.getLocalizedResourceManager().registerProperty(textTitle.textProperty(), "Welcome.welcomeMessage");
 		textTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 150%; -fx-fill: -fx-text-base-color;"); 
 
 		var topPane = new VBox();
@@ -241,18 +240,6 @@ public class WelcomeStage {
 
 		GridPaneUtils.setToExpandGridPaneWidth(comboThemes, comboUpdates, cbShowStartup, btnStarted, labelExplanation);
 		
-		if (GeneralTools.isMac() && "aarch64".equals(System.getProperty("os.arch"))) {  //$NON-NLS-2$
-			var textSilicon = makeMacAarch64Message();
-			textSilicon.setTextAlignment(TextAlignment.CENTER);
-			textSilicon.setOpacity(0.9);
-			var sepSilicon = new Separator(Orientation.HORIZONTAL);
-			sepSilicon.setPadding(new Insets(5, 5, 0, 5));
-			GridPaneUtils.setToExpandGridPaneWidth(sepSilicon, textSilicon);
-			paneOptions.add(sepSilicon, 0, row++, GridPane.REMAINING, 1);
-			paneOptions.add(textSilicon, 0, row++, GridPane.REMAINING, 1);
-			row++;
-		}
-		
 		pane.setBottom(paneOptions);
 		pane.setPadding(new Insets(10));
 		
@@ -277,27 +264,9 @@ public class WelcomeStage {
 		});
 		
 		btnStarted.requestFocus();
-		
+		stage.setMinWidth(450);
+		stage.setMinHeight(600);
 		return stage;
-	}
-	
-	
-	private static TextFlow makeMacAarch64Message() {
-		var textProperty = QuPathResources.getLocalizeResourceManager().createProperty("Welcome.macOsAarch64");
-
-		var textSiliconExperimental = new Text(); 
-		textSiliconExperimental.setStyle("-fx-font-weight: bold; -fx-fill: -qp-script-error-color;"); 
-		var linkSilicon = new Hyperlink(); 
-		var textSiliconExperimental2 = new Text(); 
-		textSiliconExperimental2.setStyle("-fx-fill: -fx-text-base-color;"); 
-		linkSilicon.setOnAction(e -> QuPathGUI.openInBrowser(Urls.getInstallationUrl())); 
-
-		updateMessageTextFlow(textProperty.get(), textSiliconExperimental, linkSilicon, textSiliconExperimental2);
-		textProperty.addListener((v, o, n) -> updateMessageTextFlow(n, textSiliconExperimental, linkSilicon, textSiliconExperimental2));
-		
-		return new TextFlow(
-				textSiliconExperimental, linkSilicon, textSiliconExperimental2
-				);
 	}
 	
 	
@@ -323,7 +292,7 @@ public class WelcomeStage {
 		if (key == null)
 			button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
 		else {
-			QuPathResources.getLocalizeResourceManager().registerProperty(button.textProperty(), key);
+			QuPathResources.getLocalizedResourceManager().registerProperty(button.textProperty(), key);
 			button.setContentDisplay(ContentDisplay.TOP);
 		}
 		

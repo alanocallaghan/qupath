@@ -23,12 +23,15 @@ package qupath.lib.gui.commands;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.StringProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.fx.dialogs.FileChoosers;
 import qupath.lib.analysis.stats.RunningStatistics;
 import qupath.lib.common.GeneralTools;
@@ -58,6 +61,8 @@ import qupath.lib.scripting.QP;
  *
  */
 public class TMACommands {
+
+	private static final Logger logger = LoggerFactory.getLogger(TMACommands.class);
 	
 	private enum TMARemoveType { ROW, COLUMN;
 		@Override
@@ -149,9 +154,14 @@ public class TMACommands {
 			if (!file.getName().endsWith(".qptma"))
 				file = new File(file.getParentFile(), file.getName() + ".qptma");
 			double downsample = PathPrefs.tmaExportDownsampleProperty().get();
-			TMADataIO.writeTMAData(file, imageData, overlayOptions, downsample);
-			WorkflowStep step = new DefaultScriptableWorkflowStep("Export TMA data", "exportTMAData(\"" + GeneralTools.escapeFilePath(file.getParentFile().getAbsolutePath()) + "\", " + downsample + ")");
-			imageData.getHistoryWorkflow().addStep(step);
+			try {
+				TMADataIO.writeTMAData(file, imageData, overlayOptions, downsample);
+				WorkflowStep step = new DefaultScriptableWorkflowStep("Export TMA data", "exportTMAData(\"" + GeneralTools.escapeFilePath(file.getParentFile().getAbsolutePath()) + "\", " + downsample + ")");
+				imageData.getHistoryWorkflow().addStep(step);
+			} catch (IOException e) {
+				Dialogs.showErrorMessage(title, e);
+				logger.error(e.getMessage(), e);
+			}
 //			PathAwtIO.writeTMAData(file, imageData, viewer.getOverlayOptions(), Double.NaN);
 		}
 	}

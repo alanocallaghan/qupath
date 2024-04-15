@@ -33,6 +33,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
+import javafx.beans.binding.Bindings;
+import javafx.geometry.Pos;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.layout.BorderPane;
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,8 +66,8 @@ import qupath.lib.common.ColorTools;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.common.ThreadTools;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.charts.HistogramPanelFX;
-import qupath.lib.gui.charts.HistogramPanelFX.ThresholdedChartWrapper;
+import qupath.lib.gui.charts.HistogramChart;
+import qupath.lib.gui.charts.ChartThresholdPane;
 import qupath.fx.dialogs.Dialogs;
 import qupath.fx.utils.GridPaneUtils;
 import qupath.lib.gui.tools.GuiTools;
@@ -145,7 +149,7 @@ public class SingleMeasurementClassificationCommand implements Runnable {
 		
 		private CheckBox cbLivePreview = new CheckBox("Live preview");
 		
-		private HistogramPanelFX histogramPane = new HistogramPanelFX();
+		private HistogramChart histogramPane = new HistogramChart();
 		
 		private ClassificationRequest<BufferedImage> nextRequest;
 		
@@ -231,22 +235,24 @@ public class SingleMeasurementClassificationCommand implements Runnable {
 			GridPaneUtils.addGridRow(pane, row++, 0, "Specify name of the classifier - this will be used to save to "
 					+ "save the classifier in the current project, so it may be used for scripting later", labelSave, tfSaveName, btnSave);
 			
-			var chartWrapper = new ThresholdedChartWrapper(histogramPane.getChart());
-			chartWrapper.setIsInteractive(true);
-			chartWrapper.addThreshold(sliderThreshold.valueProperty());
+			var chartPane = new ChartThresholdPane(histogramPane);
+			chartPane.setIsInteractive(true);
+			chartPane.addThreshold(sliderThreshold.valueProperty());
 			
-			histogramPane.getChart().getYAxis().setTickLabelsVisible(false);
-			histogramPane.getChart().setAnimated(false);
+			histogramPane.getYAxis().setTickLabelsVisible(false);
+			histogramPane.setAnimated(false);
 			
-			GridPaneUtils.setToExpandGridPaneHeight(chartWrapper.getPane());
-			GridPaneUtils.setToExpandGridPaneWidth(chartWrapper.getPane());
+			GridPaneUtils.setToExpandGridPaneHeight(chartPane);
+			GridPaneUtils.setToExpandGridPaneWidth(chartPane);
 			GridPaneUtils.setToExpandGridPaneWidth(comboFilter, comboChannels, comboMeasurements, sliderThreshold,
 					comboAbove, comboBelow, tfSaveName, cbLivePreview);
 			
-			histogramPane.getChart().getYAxis().setTickLabelsVisible(false);
-			histogramPane.getChart().setAnimated(false);
-			chartWrapper.getPane().setPrefSize(200, 80);
-			pane.add(chartWrapper.getPane(), pane.getColumnCount(), 0, 1, pane.getRowCount());
+			chartPane.setPrefSize(200, 80);
+
+
+			pane.add(
+					addLogHistogramCheckbox(chartPane, histogramPane),
+					pane.getColumnCount(), 0, 1, pane.getRowCount()-1);
 			
 			// Add listeners
 			comboChannels.valueProperty().addListener((v, o, n) -> updateChannelFilter());
@@ -260,6 +266,39 @@ public class SingleMeasurementClassificationCommand implements Runnable {
 			comboAbove.valueProperty().addListener((v, o, n) -> maybePreview());
 			comboBelow.valueProperty().addListener((v, o, n) -> maybePreview());
 			cbLivePreview.selectedProperty().addListener((v, o, n) -> maybePreview());
+		}
+
+
+		/**
+		 * Wrap in a BorderPane to add a checkbox for log histograms.
+		 * TODO: Find a better place for this method...
+		 * @param chartPane
+		 * @param histogramPane
+		 * @return
+		 */
+		static BorderPane addLogHistogramCheckbox(ChartThresholdPane chartPane, HistogramChart histogramPane) {
+			// Optionally show a log histogram
+			var cbLogHistogram = new CheckBox("Log histogram");
+			histogramPane.countsTransformProperty().bind(Bindings.createObjectBinding(() -> {
+				if (cbLogHistogram.isSelected())
+					return HistogramChart.CountsTransformMode.LOGARITHM;
+				else
+					return HistogramChart.CountsTransformMode.RAW;
+			}, cbLogHistogram.selectedProperty()));
+			// We don't have a proper log axis, so we need to try to avoid showing regular ticks since this is
+			// misleading (using log spacing would be preferable, but showing no ticks is better than confusing ticks)
+			if (histogramPane.getYAxis() instanceof NumberAxis yAxis) {
+				yAxis.minorTickCountProperty().bind(Bindings.createIntegerBinding(() -> {
+					if (cbLogHistogram.isSelected())
+						return 0;
+					else
+						return 5;
+				}, cbLogHistogram.selectedProperty()));
+			}
+			BorderPane.setAlignment(cbLogHistogram, Pos.CENTER);
+			var chartBorderPane = new BorderPane(chartPane);
+			chartBorderPane.setBottom(cbLogHistogram);
+			return chartBorderPane;
 		}
 		
 		
@@ -490,7 +529,7 @@ public class SingleMeasurementClassificationCommand implements Runnable {
 					.filter(d -> Double.isFinite(d)).toArray();
 			var stats = new DescriptiveStatistics(allValues);
 			var histogram = new Histogram(allValues, 100, stats.getMin(), stats.getMax());
-			histogramPane.getHistogramData().setAll(HistogramPanelFX.createHistogramData(histogram, false, ColorTools.packARGB(100, 200, 20, 20)));
+			histogramPane.getHistogramData().setAll(HistogramChart.createHistogramData(histogram, ColorTools.packARGB(100, 200, 20, 20)));
 			
 			double value = previousThresholds.getOrDefault(measurement, stats.getMean());
 			sliderThreshold.setMin(stats.getMin());
@@ -536,6 +575,7 @@ public class SingleMeasurementClassificationCommand implements Runnable {
 				return name;
 			} catch (Exception e) {
 				Dialogs.showErrorNotification(title, e);
+				logger.error(e.getMessage(), e);
 				return null;
 			}
 		}

@@ -23,8 +23,11 @@ package qupath.lib.gui.actions;
 
 import static qupath.lib.gui.actions.ActionTools.createAction;
 
+import javafx.collections.ListChangeListener;
 import org.controlsfx.control.action.Action;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.annotations.ActionAccelerator;
 import qupath.lib.gui.actions.annotations.ActionConfig;
@@ -32,7 +35,7 @@ import qupath.lib.gui.actions.annotations.ActionIcon;
 import qupath.lib.gui.commands.BrightnessContrastCommand;
 import qupath.lib.gui.commands.Commands;
 import qupath.lib.gui.commands.ContextHelpViewer;
-import qupath.lib.gui.commands.CountingPanelCommand;
+import qupath.lib.gui.commands.CountingDialogCommand;
 import qupath.lib.gui.commands.ProjectCommands;
 import qupath.lib.gui.commands.TMACommands;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -46,6 +49,8 @@ import qupath.lib.gui.tools.IconFactory.PathIcons;
  * @since v0.5.0
  */
 public class CommonActions {
+
+	private static final Logger logger = LoggerFactory.getLogger(CommonActions.class);
 	
 	@ActionConfig("Action.File.Project.createProject")
 	public final Action PROJECT_NEW;
@@ -64,14 +69,15 @@ public class CommonActions {
 	
 	@ActionIcon(PathIcons.POINTS_TOOL)
 	@ActionConfig("CommonActions.showCountingTool")
-	public final Action COUNTING_PANEL;
+	public final Action SHOW_POINTS_DIALOG;
 
 	@ActionConfig("CommonActions.addTMANote")
 	public final Action TMA_ADD_NOTE;
 	
 	@ActionConfig("CommonActions.showPointConvexHull")
 	public final Action CONVEX_POINTS;
-	
+
+	@ActionIcon(PathIcons.LOG_VIEWER)
 	@ActionAccelerator("shortcut+shift+l")
 	@ActionConfig("CommonActions.showLog")
 	public final Action SHOW_LOG;
@@ -116,12 +122,28 @@ public class CommonActions {
 		PROJECT_NEW = createAction(() -> Commands.promptToCreateProject(qupath));
 		PROJECT_OPEN = createAction(() -> Commands.promptToOpenProject(qupath));
 		PROJECT_ADD_IMAGES = createAction(() -> ProjectCommands.promptToImportImages(qupath));
-		
-		BRIGHTNESS_CONTRAST = ActionTools.createAction(new BrightnessContrastCommand(qupath));
-		COUNTING_PANEL = ActionTools.createAction(new CountingPanelCommand(qupath));
+
+		var brightnessCommand = new BrightnessContrastCommand(qupath);
+		BRIGHTNESS_CONTRAST = ActionTools.createAction(brightnessCommand);
+		ActionTools.installInfoMessage(BRIGHTNESS_CONTRAST,  brightnessCommand.infoMessage());
+
+		SHOW_POINTS_DIALOG = ActionTools.createAction(new CountingDialogCommand(qupath));
 		TMA_ADD_NOTE = qupath.createImageDataAction(imageData -> TMACommands.promptToAddNoteToSelectedCores(imageData));
 		CONVEX_POINTS = ActionTools.createSelectableAction(PathPrefs.showPointHullsProperty());
-		SHOW_LOG = ActionTools.createAction(() -> qupath.showLogWindow());
+
+		// The log viewer should already exist - in which case we can use it to support info messages
+		var logviewer = qupath.getLogViewerCommand();
+		if (logviewer == null) {
+			// Log a warning (but who will see it?!)
+			logger.warn("Log viewer not available! Will attempt to load lazily.");
+			SHOW_LOG = ActionTools.createAction(() -> qupath.getLogViewerCommand().show());
+		} else {
+			SHOW_LOG = ActionTools.createAction(() -> logviewer.show());
+			var counts = logviewer.getLogMessageCounts();
+			if (counts != null)
+				ActionTools.installInfoMessage(SHOW_LOG, logviewer.getInfoMessage());
+		}
+
 		SHOW_ANALYSIS_PANE = ActionTools.createSelectableAction(qupath.showAnalysisPaneProperty());
 		PREFERENCES = Commands.createSingleStageAction(() -> Commands.createPreferencesDialog(qupath));
 		SHOW_OBJECT_DESCRIPTIONS = Commands.createSingleStageAction(() -> Commands.createObjectDescriptionsDialog(qupath));
@@ -130,10 +152,20 @@ public class CommonActions {
 		MEASURE_DETECTIONS = qupath.createImageDataAction(imageData -> Commands.showDetectionMeasurementTable(qupath, imageData));
 		MEASURE_GRID_ANNOTATIONS = qupath.createImageDataAction(imageData -> Commands.showAnnotationGridView(qupath));
 		MEASURE_GRID_TMA_CORES = qupath.createImageDataAction(imageData -> Commands.showTMACoreGridView(qupath));
-		HELP_VIEWER = Commands.createSingleStageAction(() -> ContextHelpViewer.getInstance(qupath).getStage());
+
+		var contextHelp = ContextHelpViewer.getInstance(qupath);
+		HELP_VIEWER = Commands.createSingleStageAction(() -> contextHelp.getStage());
+		ActionTools.installInfoMessage(HELP_VIEWER, contextHelp.getInfoMessage());
 		
 		// This has the effect of applying the annotations
 		ActionTools.getAnnotatedActions(this);
+	}
+
+	private void handleBrightnessContrastWarnings(ListChangeListener.Change<? extends String> change) {
+		if (change.getList().isEmpty())
+			BRIGHTNESS_CONTRAST.getProperties().remove("WARNINGS");
+		else
+			BRIGHTNESS_CONTRAST.getProperties().put("WARNINGS", change.getList().size());
 	}
 	
 	/**

@@ -153,7 +153,7 @@ public class ViewTrackerControlPane implements Runnable {
 		this.qupath = qupath;
 		viewer = qupath.getViewer();
 		trackersList = FXCollections.observableArrayList(getExistingRecordings(qupath, viewer.getImageData()));
-		
+
 		// Create listener that will be triggered for every imageData change
 		imageDataListener = (v, o, n) -> {
 			// Stop recording (if recording)
@@ -292,6 +292,7 @@ public class ViewTrackerControlPane implements Runnable {
 					Files.delete(tracker.getFile().toPath());
 				} catch (IOException ex) {
 					Dialogs.showErrorNotification("Could not delete recording", ex);
+					logger.error(ex.getMessage(), ex);
 				}
 			}
 			// Remove all trackers to delete from ListView (even if exception when deleting file)
@@ -310,9 +311,12 @@ public class ViewTrackerControlPane implements Runnable {
 		btnPane.addRow(0, exportBtn, deleteBtn, btnMore);
 		
 		// Disable all buttons if no recording is selected, disable 'Export' and 'More' if multiple selection
-		exportBtn.disableProperty().bind(Bindings.or(Bindings.equal(Bindings.size(table.getSelectionModel().getSelectedItems()), 1).not(), isAnalysisOpened));
-		deleteBtn.disableProperty().bind(Bindings.or(table.getSelectionModel().selectedItemProperty().isNull(), isAnalysisOpened));
-		btnMore.disableProperty().bind(Bindings.or(Bindings.equal(Bindings.size(table.getSelectionModel().getSelectedItems()), 1).not(), isAnalysisOpened));
+		exportBtn.disableProperty().bind(
+				playing.or(Bindings.or(Bindings.equal(Bindings.size(table.getSelectionModel().getSelectedItems()), 1).not(), isAnalysisOpened)));
+		deleteBtn.disableProperty().bind(
+				playing.or(Bindings.or(table.getSelectionModel().selectedItemProperty().isNull(), isAnalysisOpened)));
+		btnMore.disableProperty().bind(
+				playing.or(Bindings.or(Bindings.equal(Bindings.size(table.getSelectionModel().getSelectedItems()), 1).not(), isAnalysisOpened)));
 		
 		// Disable playback button if no ViewTracker or multiple ViewTrackers are selected
 		actionPlayback.disabledProperty().bind(Bindings.size(table.getSelectionModel().getSelectedItems()).isNotEqualTo(1).or(recordingMode).or(isAnalysisOpened));
@@ -363,6 +367,7 @@ public class ViewTrackerControlPane implements Runnable {
 					}
 				} catch (Exception ex) {
 					Dialogs.showErrorMessage("Drag & Drop", ex);
+					logger.error(ex.getMessage(), ex);
 				}
 			}
 			e.setDropCompleted(true);
@@ -518,7 +523,7 @@ public class ViewTrackerControlPane implements Runnable {
 			dialog.initOwner(qupath.getStage());
 			dialog.setTitle("Tracking");
 			
-			StackPane pane = new StackPane(mainPane);
+			BorderPane pane = new BorderPane(mainPane);
 			dialog.setScene(new Scene(pane));
 
 			// Necessary for window resizing when expanding the TitledPane
@@ -559,10 +564,11 @@ public class ViewTrackerControlPane implements Runnable {
 			});
 			
 			dialog.show();
+
+			// Remove the arrow in the TitledPane
+			titledPane.lookup(".arrow").setVisible(false);
 		}
 		
-		// Remove the arrow in the TitledPane
-		titledPane.lookup(".arrow").setVisible(false);
 	}
 	
 	/**

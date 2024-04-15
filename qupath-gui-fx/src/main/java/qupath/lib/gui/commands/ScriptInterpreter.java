@@ -88,7 +88,7 @@ import jfxtras.scene.layout.GridPane;
 import qupath.lib.gui.QuPathGUI;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.panes.ObjectTreeBrowser;
-import qupath.lib.gui.prefs.PathPrefs;
+import qupath.lib.gui.prefs.SystemMenuBar;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.tools.WebViews;
 import qupath.lib.images.ImageData;
@@ -536,8 +536,7 @@ class ScriptInterpreter {
 		paneMasterDetail.setDetailNode(tabPane);
 		pane.setTop(menuBar);
 		pane.setCenter(paneMasterDetail);
-		//			menuBar.setUseSystemMenuBar(true);
-		menuBar.useSystemMenuBarProperty().bindBidirectional(PathPrefs.useSystemMenubarProperty());
+		SystemMenuBar.manageChildMenuBar(menuBar);
 
 		stage.setScene(new Scene(pane, 800, 600));
 		textAreaInput.requestFocus();

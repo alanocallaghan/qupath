@@ -107,14 +107,20 @@ public class PathPrefs {
 		return PreferenceManager.createForUserPreferences(nodeName);
 	}
 
-	private static BooleanProperty useSystemMenubar = createPersistentPreference("useSystemMenubar", true);
-	
+	private static BooleanProperty useSystemMenubar = new SimpleBooleanProperty();
+
 	/**
-	 * Property used to specify whether the system menubar should be used.
+	 * Legacy property used to specify whether the system menubar should be used for the main QuPath stage.
 	 * This should be bound bidirectionally to the corresponding property of any menubars created.
-	 * @return
+	 * @return a bound boolean property, which is true whenever systemMenubarProperty() is set to ALL_WINDOWS.
+	 * @deprecated use {@link SystemMenuBar#systemMenubarProperty()} instead
 	 */
+	@Deprecated
 	public static BooleanProperty useSystemMenubarProperty() {
+		if (!useSystemMenubar.isBound()) {
+			logger.warn("PathPrefs.useSystemMenubarProperty() is deprecated - please use PathPrefs.systemMenubarProperty() instead");
+			useSystemMenubar.bind(SystemMenuBar.systemMenubarProperty().isEqualTo(SystemMenuBar.SystemMenuBarOption.ALL_WINDOWS));
+		}
 		return useSystemMenubar;
 	}
 
@@ -302,8 +308,8 @@ public class PathPrefs {
 			defaultLocaleFormat.set(Locale.getDefault(Category.FORMAT));
 			defaultLocaleDisplay.set(Locale.getDefault(Category.DISPLAY));
 		});
-		defaultLocaleFormat.addListener((v, o, n) -> QuPathResources.getLocalizeResourceManager().refresh());
-		defaultLocaleDisplay.addListener((v, o, n) -> QuPathResources.getLocalizeResourceManager().refresh());
+		defaultLocaleFormat.addListener((v, o, n) -> QuPathResources.getLocalizedResourceManager().refresh());
+		defaultLocaleDisplay.addListener((v, o, n) -> QuPathResources.getLocalizedResourceManager().refresh());
 	}
 
 	
@@ -318,7 +324,17 @@ public class PathPrefs {
 	public static BooleanProperty showStartupMessageProperty() {
 		return showStartupMessage;
 	}
-	
+
+
+	private static BooleanProperty showToolBarBadges = createPersistentPreference("showToolBarBadges", true);
+
+	/**
+	 * Show badges on the toolbar, e.g. to provide messages or warnings.
+	 * @return
+	 */
+	public static BooleanProperty showToolBarBadgesProperty() {
+		return showToolBarBadges;
+	}
 	
 		
 	private static IntegerProperty maxMemoryMB;
@@ -460,8 +476,17 @@ public class PathPrefs {
 	
 	/**
 	 * Get the {@link Preferences} object for storing user preferences.
+	 * <p>
+	 *     Note that the preferences object returned by this method must not be retained and reused,
+	 *     because it may be invalidated by a call to {@link #resetPreferences()}.
+	 *     Rather, as far as possible other methods of this class should be used rather than accessing the
+	 *     {@link Preferences} directly.
+	 * </p>
 	 * @return
+	 * @deprecated since v0.5.0 - avoid direct use of the {@link Preferences} object, since this may be invalidated by
+	 *             a call to {@link #resetPreferences()}
 	 */
+	@Deprecated
 	public static Preferences getUserPreferences() {
 		return MANAGER.getPreferences();
 	}
@@ -1320,7 +1345,7 @@ public class PathPrefs {
 			}
 	}
 	
-	/**
+	/*
 	 * TODO: Move this into a more sensible location
 	 */
 	private static ObjectProperty<DetectionTreeDisplayModes> detectionTreeDisplayMode = PathPrefs.createPersistentPreference(
@@ -1519,6 +1544,18 @@ public class PathPrefs {
 	 */
 	public static DoubleProperty createPersistentPreference(final String name, final double defaultValue) {
 		return MANAGER.createPersistentDoubleProperty(name, defaultValue);
+	}
+
+
+	/**
+	 * Create a persistent property, which is one that will be saved to/reloaded from the user preferences.
+	 *
+	 * @param name
+	 * @param defaultValue
+	 * @return
+	 */
+	public static LongProperty createPersistentPreference(final String name, final long defaultValue) {
+		return MANAGER.createPersistentLongProperty(name, defaultValue);
 	}
 
 	
