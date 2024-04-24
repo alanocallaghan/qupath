@@ -23,7 +23,6 @@ include 'qupath-extension-script-editor'
 include 'qupath-extension-openslide'
 include 'qupath-extension-bioformats'
 
-includeFlat 'qupath-extension-djl'
 includeFlat 'qupath-extension-instanseg'
 
 // Support JavaFX dependency override
