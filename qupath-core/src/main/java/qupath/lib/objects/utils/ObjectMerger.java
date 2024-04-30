@@ -38,7 +38,6 @@ import qupath.lib.roi.GeometryTools;
 import qupath.lib.roi.RoiTools;
 import qupath.lib.roi.interfaces.ROI;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,7 +52,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Helper class for merging objects using different criteria.
@@ -388,7 +386,7 @@ public class ObjectMerger {
             if (union == 0) {
                 return false;
             }
-            return intersection / union > iouThreshold;
+            return (intersection / union) > iouThreshold;
         };
     }
 
