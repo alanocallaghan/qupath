@@ -1,3 +1,29 @@
+## Version 0.6.0-SNAPSHOT
+
+This is a *work in progress* for the next major release.
+
+### Enhancements
+* Read and write OME-Zarr images (https://github.com/qupath/qupath/pull/1474)
+
+### Bugs fixed
+* Tile export to .ome.tif can convert to 8-bit unnecessarily (https://github.com/qupath/qupath/issues/1494)
+* Brightness/Contrast 'Apply to similar images' fails to update settings immediately across viewers (https://github.com/qupath/qupath/issues/1499)
+* Full image annotation for Sparse training image throws errors for detections (https://github.com/qupath/qupath/issues/1443)
+  Channel name can sometimes change when using the quick channel color selector (https://github.com/qupath/qupath/issues/1500)
+
+### Dependency updates
+* Bio-Formats 7.3.0
+* Commonmark 0.22.0
+* DeepJavaLibrary 0.27.0
+* Groovy 4.0.21
+* Guava 33.1.0-jre
+* JavaFX 22.0.1
+* JNA 5.14.0
+* OpenCV 4.9.0
+* OpenJDK 21
+* slf4j 2.0.12
+
+
 ## Version 0.5.1
 
 This is a *minor release* that aims to be fully compatible with v0.5.0, while fixing several bugs.
