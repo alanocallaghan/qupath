@@ -4,6 +4,7 @@ This is a *work in progress* for the next major release.
 
 ### Enhancements
 * Read and write OME-Zarr images (https://github.com/qupath/qupath/pull/1474)
+* Improved display of annotation names
 
 ### Bugs fixed
 * Tile export to .ome.tif can convert to 8-bit unnecessarily (https://github.com/qupath/qupath/issues/1494)
@@ -11,15 +12,19 @@ This is a *work in progress* for the next major release.
 * Full image annotation for Sparse training image throws errors for detections (https://github.com/qupath/qupath/issues/1443)
   Channel name can sometimes change when using the quick channel color selector (https://github.com/qupath/qupath/issues/1500)
 * TileExporter exports ImageJ TIFFs with channels converted to z-stacks (https://github.com/qupath/qupath/issues/1503)
+* Black row or column appears on some downsampled images (https://github.com/qupath/qupath/issues/1527)
+* Full image annotations can be shifted accidentally outside the image bounds (https://github.com/qupath/qupath/issues/1533)
 
 ### Dependency updates
 * Bio-Formats 7.3.0
 * Commonmark 0.22.0
-* DeepJavaLibrary 0.27.0
+* DeepJavaLibrary 0.28.0
 * Groovy 4.0.21
+* Gson 2.11.0
 * Guava 33.1.0-jre
 * JavaFX 22.0.1
 * JNA 5.14.0
+* Picocli 4.7.6
 * OpenCV 4.9.0
 * OpenJDK 21
 * slf4j 2.0.12
