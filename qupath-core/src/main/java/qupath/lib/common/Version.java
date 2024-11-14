@@ -79,7 +79,7 @@ public class Version implements Comparable<Version> {
 	public static final Version UNKNOWN = new Version(-1, -1, -1, "UNKNOWN.VERSION");
 	
 	
-	private Version(int major, int minor, int patch, String suffix) {
+	public Version(int major, int minor, int patch, String suffix) {
 		this.major = major;
 		this.minor = minor;
 		this.patch = patch;
