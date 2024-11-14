@@ -117,9 +117,6 @@ public class ExtensionControlPane extends BorderPane {
     private Button rmIdxBtn;
 
     @FXML
-    private TableView<Index> indexView;
-
-    @FXML
     private Button disableBtn;
     @FXML
     private Button submitBtn;
@@ -189,26 +186,6 @@ public class ExtensionControlPane extends BorderPane {
                         .toList());
         extensionListView1.setCellFactory(listView -> new ExtensionListCell(extensionManager, listView));
         extensionListView2.setCellFactory(listView -> new ExtensionListCell(extensionManager, listView));
-
-        // indexView.getItems().addAll(
-        //         new Index("QuPath extensions", "Extensions managed by the QuPath team", "https://github.com/alanocallaghan/indexes/raw/refs/heads/master/qupath-ind.json"),
-        //         new Index("Other extensions", "Extensions managed by someone else", "https://github.com/alanocallaghan/indexes/raw/refs/heads/master/other-ind.json")
-        // );
-
-        // TableColumn<Index, String> nameColumn = new TableColumn<>("Name");
-        // TableColumn<Index, String> descriptionColumn = new TableColumn<>("Description");
-        // TableColumn<Index, String> urlColumn = new TableColumn<>("URL");
-        //
-        // // Step 2: Set up how data will be mapped to each column
-        // nameColumn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().name()));
-        // descriptionColumn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().description()));
-        // urlColumn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().url()));
-        //
-        // indexView.getColumns().addAll(nameColumn, descriptionColumn, urlColumn);
-
-        // addIdxBtn.setGraphic(createIcon(IconFactory.PathIcons.PLUS));
-        // rmIdxBtn.setGraphic(createIcon(IconFactory.PathIcons.MINUS));
-
     }
 
     private void handleExtensionMapChange(MapChangeListener.Change<? extends Class<? extends QuPathExtension>, ? extends QuPathExtension> change) {
