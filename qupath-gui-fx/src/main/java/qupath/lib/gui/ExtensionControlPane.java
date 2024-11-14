@@ -33,6 +33,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -41,10 +42,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -98,7 +96,7 @@ import java.util.stream.Collectors;
  * Borderpane that displays extensions, with options to remove,
  * open containing folder, update, where possible.
  */
-public class ExtensionControlPane extends VBox {
+public class ExtensionControlPane extends BorderPane {
 
     private static final Logger logger = LoggerFactory.getLogger(QuPathGUI.class);
     private static final Pattern GITHUB_REPO_PATTERN = Pattern.compile(
@@ -107,11 +105,20 @@ public class ExtensionControlPane extends VBox {
             "https://github.com/[0-9a-zA-Z-]+/(qupath-extension-[0-9a-zA-Z-]+)/" +
                    "releases/download/[a-zA-Z0-9-.]+/(qupath-extension-[0-9a-zA-Z-.]+.jar)");
 
-    @FXML
-    private ListView<QuPathExtension> extensionListView;
+    public record Index(String name, String description, String url) {}
 
     @FXML
-    private Button rmBtn;
+    private ListView<QuPathExtension> extensionListView1;
+    @FXML
+    private ListView<QuPathExtension> extensionListView2;
+    @FXML
+    private Button addIdxBtn;
+    @FXML
+    private Button rmIdxBtn;
+
+    @FXML
+    private TableView<Index> indexView;
+
     @FXML
     private Button disableBtn;
     @FXML
@@ -120,14 +127,9 @@ public class ExtensionControlPane extends VBox {
     private Button openExtensionDirBtn;
     @FXML
     private Button updateBtn;
-    @FXML
-    private Button downloadBtn;
 
     @FXML
     private HBox addHBox;
-
-    @FXML
-    private TextField textArea;
 
     @FXML
     private TitledPane inst;
@@ -160,40 +162,61 @@ public class ExtensionControlPane extends VBox {
 
         openExtensionDirBtn.disableProperty().bind(
                 UserDirectoryManager.getInstance().userDirectoryProperty().isNull());
-        downloadBtn.disableProperty().bind(
-            textArea.textProperty().isEmpty());
 
-        downloadBtn.setGraphic(IconFactory.createNode(12, 12, IconFactory.PathIcons.DOWNLOAD));
+        var allExtensions = extensionManager.getLoadedExtensions()
+                .values();
 
+        var inbuiltExtensions = extensionManager.getLoadedExtensions()
+                .values().stream()
+                .filter(e -> e.getVersion().compareTo(new Version(0, 6, 0, "SNAPSHOT")) == 0)
+                .toList();
+        allExtensions.removeAll(inbuiltExtensions);
         // By default, add failed extensions at the end of the list
-        extensionListView.getItems().addAll(
-                extensionManager.getLoadedExtensions().values()
+        extensionListView1.getItems().addAll(
+                inbuiltExtensions
                     .stream()
                     .sorted(Comparator.comparing(QuPathExtension::getName))
                     .toList());
-        extensionListView.getItems().addAll(
+        extensionListView2.getItems().addAll(
+                allExtensions
+                        .stream()
+                        .sorted(Comparator.comparing(QuPathExtension::getName))
+                        .toList());
+        extensionListView2.getItems().addAll(
                 extensionManager.getFailedExtensions().values()
                         .stream()
                         .sorted(Comparator.comparing(QuPathExtension::getName))
                         .toList());
-        extensionListView.setCellFactory(listView -> new ExtensionListCell(extensionManager, listView));
+        extensionListView1.setCellFactory(listView -> new ExtensionListCell(extensionManager, listView));
+        extensionListView2.setCellFactory(listView -> new ExtensionListCell(extensionManager, listView));
 
-        textArea.addEventHandler(KeyEvent.KEY_RELEASED, e -> {
-            if (e.getCode() == KeyCode.ENTER) {
-                downloadExtension();
-            }
-            if (e.getCode() == KeyCode.ESCAPE) {
-                cancelDownload();
-            }
-        });
+        // indexView.getItems().addAll(
+        //         new Index("QuPath extensions", "Extensions managed by the QuPath team", "https://github.com/alanocallaghan/indexes/raw/refs/heads/master/qupath-ind.json"),
+        //         new Index("Other extensions", "Extensions managed by someone else", "https://github.com/alanocallaghan/indexes/raw/refs/heads/master/other-ind.json")
+        // );
+
+        // TableColumn<Index, String> nameColumn = new TableColumn<>("Name");
+        // TableColumn<Index, String> descriptionColumn = new TableColumn<>("Description");
+        // TableColumn<Index, String> urlColumn = new TableColumn<>("URL");
+        //
+        // // Step 2: Set up how data will be mapped to each column
+        // nameColumn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().name()));
+        // descriptionColumn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().description()));
+        // urlColumn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().url()));
+        //
+        // indexView.getColumns().addAll(nameColumn, descriptionColumn, urlColumn);
+
+        // addIdxBtn.setGraphic(createIcon(IconFactory.PathIcons.PLUS));
+        // rmIdxBtn.setGraphic(createIcon(IconFactory.PathIcons.MINUS));
+
     }
 
     private void handleExtensionMapChange(MapChangeListener.Change<? extends Class<? extends QuPathExtension>, ? extends QuPathExtension> change) {
         if (change.wasAdded()) {
-            extensionListView.getItems().add(change.getValueAdded());
+            extensionListView2.getItems().add(change.getValueAdded());
         }
         if (change.wasRemoved()) {
-            extensionListView.getItems().remove(change.getValueRemoved());
+            extensionListView2.getItems().remove(change.getValueRemoved());
         }
     }
 
@@ -535,59 +558,6 @@ public class ExtensionControlPane extends VBox {
     }
 
     @FXML
-    private void downloadExtension() {
-        var components = parseComponents(textArea.getText());
-        if (!(components.length > 0)) {
-            Dialogs.showErrorNotification(
-                    QuPathResources.getString("ExtensionControlPane.unableToDownload"),
-                    QuPathResources.getString("ExtensionControlPane.unableToParseURL"));
-            return;
-        }
-        GitHubProject.GitHubRepo repo;
-        if (components.length == 1) {
-            repo = GitHubProject.GitHubRepo.create("", "qupath", components[0]);
-        } else {
-            repo = GitHubProject.GitHubRepo.create("", components[0], components[1]);
-        }
-        try {
-            askToDownload(repo);
-        } catch (URISyntaxException | IOException | InterruptedException e) {
-            logger.error("Unable to download extension", e);
-            Dialogs.showErrorNotification(QuPathResources.getString("ExtensionControlPane.unableToDownload"), e);
-        }
-        cancelDownload();
-    }
-
-
-    private String[] parseComponents(String text) {
-        // https://stackoverflow.com/questions/59081778/rules-for-special-characters-in-github-repository-name
-        String repoPart = "[\\w.-]+";
-        // if it's just a repo name, then assume it's under qupath
-        if (text.matches("^" + repoPart + "$")) {
-            return new String[]{text};
-        }
-        // if it's a something/somethingelse, then assume it's a github repo with owner/repo
-        if (text.matches("^" + repoPart + "/" + repoPart + "$")) {
-            return text.split("/");
-        }
-        // last chance, it's a git https or git URL
-        if (text.matches("^(https://)?(www.)?github.com/" + repoPart + "/" + repoPart + "/?$") ||
-                text.matches("^git@github.com/" + repoPart + "/" + repoPart + "/?$")) {
-            text = text.replace("https://", "");
-            text = text.replace("www.", "");
-            text = text.replace("git@", "");
-            text = text.replace("github.com", "");
-            return parseComponents(text);
-        }
-        return new String[0];
-    }
-
-    @FXML
-    private void cancelDownload() {
-        // textArea.clear();
-    }
-
-    @FXML
     private void openExtensionDir() {
         var dir = ExtensionClassLoader.getInstance().getExtensionsDirectory();
         if (dir != null) {
@@ -740,11 +710,11 @@ public class ExtensionControlPane extends VBox {
             @FXML
             private HBox btnHBox;
             @FXML
-            private Button rmBtn;
+            private Button modifyBtn;
             @FXML
-            private Button updateBtn;
+            private Label nameText, typeText, descriptionText;
             @FXML
-            private Label nameText, typeText, versionText, descriptionText;
+            private ComboBox<String> versionComboBox;
 
             ExtensionListCellBox(ExtensionManager manager) {
                 this.manager = manager;
@@ -757,8 +727,7 @@ public class ExtensionControlPane extends VBox {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                rmBtn.setGraphic(createIcon(IconFactory.PathIcons.MINUS));
-                updateBtn.setGraphic(createIcon(IconFactory.PathIcons.REFRESH));
+                modifyBtn.setGraphic(createIcon(IconFactory.PathIcons.COG));
                 gitHubBtn.setGraphic(createIcon(IconFactory.PathIcons.GITHUB));
             }
 
@@ -781,23 +750,21 @@ public class ExtensionControlPane extends VBox {
                     nameText.setText(extension.getName() + " " + QuPathResources.getString("ExtensionControlPane.notCompatible"));
                 else
                    nameText.setText(extension.getName());
-                typeText.setText(getExtensionType(extension));
+                // typeText.setText(getExtensionType(extension));
                 var version = extension.getVersion();
-                if (version == null || Version.UNKNOWN.equals(version))
-                    versionText.setText(QuPathResources.getString("ExtensionControlPane.unknownVersion"));
-                else
-                    versionText.setText("v" + version);
-                descriptionText.setText(WordUtils.wrap(extension.getDescription(), 80));
+                versionComboBox.getItems().add(version.toString());
+                versionComboBox.getItems().add("Not installed");
+                versionComboBox.getSelectionModel().select(version.toString());
+
+                // descriptionText.setText(WordUtils.wrap(extension.getDescription(), 80));
+
                 // core and non-core extensions have different classloaders;
                 // can't remove or update core ones
                 boolean disableButtons = !extension.getClass().getClassLoader().getClass().equals(ExtensionClassLoader.class);
-                rmBtn.setDisable(disableButtons);
-                updateBtn.setDisable(disableButtons);
                 gitHubBtn.setDisable(disableButtons);
                 // if we don't have GitHub information, we can't update
                 // but we can remove
                 if (!(extension instanceof GitHubProject)) {
-                    updateBtn.setDisable(true);
                     gitHubBtn.setDisable(true);
                 }
                 this.extension = extension;
@@ -841,7 +808,19 @@ public class ExtensionControlPane extends VBox {
             private void removeExtension() {
                 ExtensionControlPane.removeExtension(this.extension);
             }
+
+            @FXML
+            private void modifyExtension() {
+                ExtensionControlPane.updateExtension(this.extension);
+            }
+
+            @FXML
+            private void installExtension() {
+                ExtensionControlPane.updateExtension(this.extension);
+            }
+
         }
     }
+
 
 }

@@ -330,6 +330,7 @@ public class IconFactory {
 									PIXEL_CLASSIFICATION(IconSuppliers.pixelClassifierOverlayIcon()),
 									
 									PLAYBACK_PLAY(IconSuppliers.icoMoon('\ue912')),
+									PLUS(IconSuppliers.fontAwesome(FontAwesome.Glyph.PLUS)),
 									POINTS_TOOL(IconSuppliers.pointsToolIcon()),
 									POLYGON_TOOL(IconSuppliers.polygonToolIcon()),
 									
