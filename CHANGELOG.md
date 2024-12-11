@@ -52,6 +52,7 @@ Some things may be added, some things may be removed, and some things may look d
 * Channel names can now be set for all fluorescence images, even if they are RGB (https://github.com/qupath/qupath/pull/1659)
   * Note that channel colors still only be set for non-RGB images
 * Improved ImageJ integration (https://github.com/qupath/qupath/pull/1676 https://github.com/qupath/qupath/pull/1677)
+* 'Selection mode' now supports 'deselecting' objects by pressing the 'Alt' key (https://github.com/qupath/qupath/issues/1704)
 
 ### Experimental features
 These features are included for testing and feedback.
@@ -79,6 +80,7 @@ They may change or be removed in future versions.
 * Timepoint data is rarely available (or correct) (https://github.com/qupath/qupath/issues/1628)
 * Some commands cannot be run from 'Command List' (https://github.com/qupath/qupath/issues/1647)
 * ROIs with small pieces could look very 'pointy' when viewed at low resolution (https://github.com/qupath/qupath/pull/1681)
+* Create training image does not work properly for z-stacks / time series (https://github.com/qupath/qupath/issues/1701)
 
 ### API changes
 * New `Map<String, String> getMetadata()` method added to `PathObject`, `Project` and `ProjectImageEntry` (https://github.com/qupath/qupath/pull/1587)

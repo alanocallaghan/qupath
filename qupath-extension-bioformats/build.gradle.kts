@@ -55,6 +55,7 @@ dependencies {
   implementation(libs.omeZarrReader) {
       exclude(group="ome", module="formats-api") // Through bioformats_package
   }
+
   implementation("io.github.qupath:blosc:${libs.versions.blosc.get()}:${platform.classifier}")
 
 //  testImplementation("ome:bioformats_package:${bioformatsVersion}")
