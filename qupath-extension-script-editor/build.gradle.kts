@@ -1,6 +1,7 @@
 plugins {
   id("qupath.extension-conventions")
   id("qupath.javafx-conventions")
+  id("qupath.publishing-conventions")
   `java-library`
 }
 
@@ -13,7 +14,6 @@ base {
 
 dependencies {
   implementation(libs.qupath.fxtras)
-  implementation(libs.bundles.groovy)
   implementation(libs.bundles.markdown)
   implementation(libs.richtextfx)
   implementation(libs.snakeyaml)

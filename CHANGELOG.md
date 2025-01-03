@@ -81,6 +81,8 @@ They may change or be removed in future versions.
 * Some commands cannot be run from 'Command List' (https://github.com/qupath/qupath/issues/1647)
 * ROIs with small pieces could look very 'pointy' when viewed at low resolution (https://github.com/qupath/qupath/pull/1681)
 * Create training image does not work properly for z-stacks / time series (https://github.com/qupath/qupath/issues/1701)
+* Channel colors are not stored properly when using saved display settings (https://github.com/qupath/qupath/issues/1726)
+* 'Split annotations by lines' does not work for z-stacks or time-series if line thickness > 0 (https://github.com/qupath/qupath/issues/1729)
 
 ### API changes
 * New `Map<String, String> getMetadata()` method added to `PathObject`, `Project` and `ProjectImageEntry` (https://github.com/qupath/qupath/pull/1587)
@@ -111,11 +113,12 @@ They may change or be removed in future versions.
 ### Dependency updates
 * Bio-Formats 8.0.1
 * Commonmark 0.24.0
-* DeepJavaLibrary 0.30.0
-* Groovy 4.0.22
+* DeepJavaLibrary 0.31.0
+* Groovy 4.0.24
 * Gson 2.11.0
-* Guava 33.3.1-jre
+* Guava 33.4.0-jre
 * ImageJ 1.54k
+* JavaCPP 1.5.11
 * JavaFX 23
 * Java Topology Suite 1.20.0
 * JFreeSVG 5.0.6
@@ -123,9 +126,9 @@ They may change or be removed in future versions.
 * JUnit 5.11.0
 * Logback 1.5.8
 * Picocli 4.7.6
-* OpenCV 4.9.0
+* OpenCV 4.10.0
 * OpenJDK 21
-* RichTextFX 0.11.3
+* RichTextFX 0.11.4
 * slf4j 2.0.16
 * snakeyaml 2.3
 

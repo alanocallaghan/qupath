@@ -1,4 +1,5 @@
 import io.github.qupath.gradle.PlatformPlugin
+import org.apache.tools.ant.taskdefs.condition.Os
 
 plugins {
     id("qupath.common-conventions")
@@ -6,6 +7,10 @@ plugins {
     id("qupath.git-commit-id")
 
     id("qupath.djl-conventions")
+    id("qupath.application-conventions")
+
+    id("qupath.fiji-conventions")
+
     id("qupath.jpackage-conventions")
     id("qupath.license-conventions")
 
@@ -24,6 +29,11 @@ if ("32" == System.getProperty("sun.arch.data.model")) {
 }
 
 /*
+ * Set by Fiji conventions plugin
+ */
+val buildWithFiji: Boolean by project.extra
+
+/*
  * Get the current QuPath version
  */
 val qupathVersion = rootProject.version.toString()
@@ -36,17 +46,35 @@ allprojects {
 }
 
 /*
- * Get version catalog
+ * Specify the version catalog for publishing - including the current projects.
  */
 catalog {
     versionCatalog {
         from(files("./gradle/libs.versions.toml"))
+
+        val qupathGroup = group.toString()
+
         // Include version for the current jars in the version catalog, as they will be useful in extensions
         version("qupath", qupathVersion)
-        library("qupath.gui.fx", group.toString(), project(":qupath-gui-fx").name).versionRef("qupath")
-        library("qupath.core", group.toString(), project(":qupath-core").name).versionRef("qupath")
-        library("qupath.core.processing", group.toString(), project(":qupath-core-processing").name).versionRef("qupath")
+        library("qupath.gui.fx", qupathGroup, project(":qupath-gui-fx").name).versionRef("qupath")
+        library("qupath.core", qupathGroup, project(":qupath-core").name).versionRef("qupath")
+        library("qupath.core.processing", qupathGroup, project(":qupath-core-processing").name).versionRef("qupath")
+
+        // Launcher
+        library("qupath.app", qupathGroup, project(":qupath-app").name).versionRef("qupath")
+
+        // Bundled extensions
+        library("qupath.ext.bioformats", qupathGroup, project(":qupath-extension-bioformats").name).versionRef("qupath")
+        library("qupath.ext.openslide", qupathGroup, project(":qupath-extension-openslide").name).versionRef("qupath")
+        library("qupath.ext.script.editor", qupathGroup, project(":qupath-extension-script-editor").name).versionRef("qupath")
+        library("qupath.ext.svg", qupathGroup, project(":qupath-extension-svg").name).versionRef("qupath")
+
+        // All core dependencies
         bundle("qupath", listOf("qupath.gui.fx", "qupath.core", "qupath.core.processing"))
+
+        // Everything
+        bundle("qupath.all", listOf("qupath.gui.fx", "qupath.core", "qupath.core.processing",
+            "qupath.app", "qupath.ext.bioformats", "qupath.ext.openslide", "qupath.ext.script.editor", "qupath.ext.svg"))
     }
 }
 
@@ -129,8 +157,10 @@ tasks.register<JavaExec>("exportDocs") {
 val excludedProjects = listOf(project)
 val includedProjects = rootProject.subprojects.filter { !excludedProjects.contains(it) }
 
-
 dependencies {
+
+    // Include Groovy scripting
+    runtimeOnly(libs.bundles.groovy)
 
     includedProjects.forEach {
         implementation(it)
@@ -151,23 +181,6 @@ dependencies {
     }
 }
 
-application {
-    mainClass = "qupath.QuPath"
-
-    val qupathAppName = gradle.extra["qupath.app.name"] as String
-
-    applicationName = qupathAppName
-    applicationDefaultJvmArgs = listOf(gradle.extra["qupath.jvm.args"] as String)
-
-    // Necessary when using ./gradlew run to support style manager to change themes
-    applicationDefaultJvmArgs += "--add-opens"
-    applicationDefaultJvmArgs += "javafx.graphics/com.sun.javafx.css=ALL-UNNAMED"
-
-    // Necessary when using ./gradlew run to support project metadata autocomplete
-    // See https://github.com/controlsfx/controlsfx/issues/1505
-    applicationDefaultJvmArgs += "--add-opens"
-    applicationDefaultJvmArgs += "javafx.base/com.sun.javafx.event=ALL-UNNAMED"
-}
 
 
 /**
@@ -275,4 +288,66 @@ distributions {
             }
         }
     }
+}
+
+
+
+/*
+ * Custom behavior when we want to build with all Fiji dependencies
+ */
+if (buildWithFiji) {
+
+    apply(plugin="qupath.fiji-conventions")
+
+    // Set dependencies here (rather than in plugin) so we can use the SciJava version catalog
+    dependencies {
+        implementation(sciJava.bundles.fiji)
+        {
+            // Excluded because gradle doesn't support maven profiles fully - so need to get them some other way
+            exclude(group = "org.jogamp.gluegen")
+            exclude(group = "org.jogamp.jogl")
+            exclude(group = "org.jogamp.joal")
+            exclude(group = "org.bytedeco", module = "ffmpeg")
+        }
+        implementation(sciJava.org.jogamp.gluegen.gluegenRt)
+        implementation(sciJava.org.jogamp.jogl.joglAll)
+        implementation(sciJava.org.bytedeco.ffmpeg)
+
+        // Requires to ensure we use Groovy 4.x
+        implementation(sciJava.scijava.scriptingGroovy)
+
+        implementation("org.bytedeco:ffmpeg-platform:${sciJava.org.bytedeco.ffmpeg.get().version}")
+
+        val classifier = getJogampClassifier()
+        if (classifier != null) {
+            implementation("org.jogamp.gluegen:gluegen-rt:${sciJava.org.jogamp.gluegen.gluegenRt.get().version}:$classifier")
+            implementation("org.jogamp.jogl:jogl-all:${sciJava.org.jogamp.jogl.joglAll.get().version}:$classifier")
+            implementation("org.jogamp.joal:joal:${sciJava.org.jogamp.joal.joal.get().version}:$classifier")
+        } else {
+            logger.warn("Native libraries not found for jogamp")
+        }
+    }
+
+    // Required for SciJava Context
+    runtime {
+        modules.add("java.instrument")
+    }
+
+}
+
+fun getJogampClassifier(): String? {
+    if (Os.isFamily(Os.FAMILY_MAC)) {
+        return "natives-macosx-universal"
+    }
+    if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        return "natives-windows-amd64"
+    }
+    if (Os.isFamily(Os.FAMILY_UNIX)) {
+        return if (Os.isArch("arm64")) {
+            "natives-linux-aarch64"
+        } else {
+            "natives-linux-amd64"
+        }
+    }
+    return null
 }

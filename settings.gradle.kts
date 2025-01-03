@@ -1,3 +1,5 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
 pluginManagement {
     plugins {
         kotlin("jvm") version "2.0.21"
@@ -16,12 +18,14 @@ val qupathVersion = file("./VERSION").readText().trim()
 // Define the group to use for artifacts
 val qupathGroup = "io.github.qupath"
 
-// Store version & derived app name in extra properties for build scripts to use
+// Store version & base app name in extra properties for build scripts to use
 gradle.extra["qupath.app.version"] = qupathVersion
-gradle.extra["qupath.app.name"] = "QuPath-$qupathVersion"
+gradle.extra["qupath.app.name"] = "QuPath"
 
 // Default is to use 50% of available RAM
-gradle.extra["qupath.jvm.args"] = providers.gradleProperty("qupath.jvm.args").getOrElse("-XX:MaxRAMPercentage=50")
+gradle.extra["qupath.jvm.args"] = listOf(
+    providers.gradleProperty("qupath.jvm.args")
+        .getOrElse("-XX:MaxRAMPercentage=50"))
 
 // By default, create an image with jpackage (not an installer, which is slower)
 gradle.extra["qupath.package"] = providers.gradleProperty("package").getOrElse("image")
@@ -57,10 +61,16 @@ include("qupath-extension-bioformats")
 dependencyResolutionManagement {
     versionCatalogs {
         create("libs") {
-            val javafxOverride = System.getProperties().getOrDefault("javafx-version", null)
+            val javafxOverride = System.getProperties().getOrDefault("javafx.version", null)
             if (javafxOverride is String) {
                 println("Overriding JavaFX version to request $javafxOverride")
                 version("javafx", javafxOverride)
+            }
+
+            val djlOverride = System.getProperties().getOrDefault("djl.version", null)
+            if (djlOverride is String) {
+                println("Overriding DeepJavaLibrary version to request $djlOverride")
+                version("deepJavaLibrary", djlOverride)
             }
 
             // Add QuPath jars to the version catalog
@@ -87,7 +97,19 @@ dependencyResolutionManagement {
             else
                 bundle("extensions", listOf())
         }
+
+        create("sciJava") {
+            from("org.scijava:pom-scijava:40.0.0")
+            // Override scripting-groovy version for compatibility with Groovy 4 (and anything after 3.0.4)
+            version("scijava.scriptingGroovy", "1.0.0")
+        }
+
     }
+
+    repositories {
+        maven("https://maven.scijava.org/content/groups/public/")
+    }
+
 }
 
 // These lines make it possible to define directories within gradle.properties
