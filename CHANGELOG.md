@@ -21,11 +21,20 @@ Some things may be added, some things may be removed, and some things may look d
 * Optionally build QuPath *and* Fiji together (https://github.com/qupath/qupath/pull/1728)
 * Support for z-projection overlays (https://github.com/qupath/qupath/pull/1810)
   * Also new controls to navigate z-slices / time points (https://github.com/qupath/qupath/pull/1802)
+* Add tolerance when resolving object hierarchy (https://github.com/qupath/qupath/pull/1824)
+
 
 ### Enhancements
 (These are not yet ordered by interestingness)
 
 * Support system light/dark color themes
+* Menu items uses ellipsis to indicate more input will be needed
+  * Standard UX convention we didn't know about...
+* 'Update detection line thickness with zoom' preference (https://github.com/qupath/qupath/pull/1623)
+  * New preference that changes how detections are displayed at high magnifications (to avoid thick lines obscuring the image)
+* Commands to remove objects touching the bounds of the image or other objects (https://github.com/qupath/qupath/pull/1821)
+  * _Objects → Delete... → Delete objects on image bounds_
+  * _Objects → Delete... → Delete objects touching selected ROI bounds..._
 * Window menu to help find lost windows (https://github.com/qupath/qupath/pull/1790)
 * Improved display of annotation names (https://github.com/qupath/qupath/pull/1532)
 * Better performance for large pixel classifiers (https://github.com/qupath/qupath/pull/1782)
@@ -73,8 +82,6 @@ Some things may be added, some things may be removed, and some things may look d
 ### Experimental features
 These features are included for testing and feedback.
 They may change or be removed in future versions.
-* 'Dynamic detection line thickness (experimental)' preference (https://github.com/qupath/qupath/pull/1623)
-  * Experimental preference to adjust how detections are displayed when zoomed in
 * New toolbar button to show/hide 'neighbors' in the viewer (https://github.com/qupath/qupath/pull/1597)
   * Note that the *Delaunay cluster features 2D* command is now deprecated - see https://github.com/qupath/qupath/issues/1590 for details
     * If you use this command, the calculated connections are displayed instead of the default neighbor connections for compatibility.
@@ -153,7 +160,7 @@ They may change or be removed in future versions.
 * qupath-javadoc-viewer 0.1.2
 * OpenCV 4.10.0
 * OpenJDK 21
-* RichTextFX 0.11.4
+* RichTextFX 0.11.5
 * slf4j 2.0.16
 * snakeyaml 2.3
 
@@ -574,6 +581,7 @@ Here's an abridged version of the main changes, grouped by category.
   * Making measurements is *much* faster in some circumstances (https://github.com/qupath/qupath/pull/1076)
   * It's possible to restrict live prediction more closely to annotated regions ((https://github.com/qupath/qupath/pull/1076))
   * Warn if trying to train a pixel classifier with too many features (https://github.com/qupath/qupath/issues/947)
+  * Improve the layout of the buttons at the bottom of the pixel classifier pane (https://github.com/qupath/qupath/pull/1823)
 * New 'Analyze > Spatial analysis > Signed distance to annotations 2D' command (https://github.com/qupath/qupath/issues/1032)
 * New 'Objects > Lock... >' commands
   * Enables annotations & TMA cores to be locked, so they cannot accidentally be moved or edited (deletion is still possible)

@@ -441,20 +441,18 @@ public class ImageDisplay extends AbstractImageRenderer {
 		}
 		
 		List<ChannelDisplayInfo> tempChannelOptions = channelManager.getAvailableChannels(showAllRGBTransforms.get());
-		List<ChannelDisplayInfo> tempSelectedChannels;
+		List<ChannelDisplayInfo> tempSelectedChannels = selectedChannels.stream()
+				.filter(tempChannelOptions::contains)
+				.collect(Collectors.toCollection(ArrayList::new));
 		// Select all the channels
-		if (serverChanged) {
+		if (serverChanged || tempSelectedChannels.isEmpty()) {
 			tempSelectedChannels = new ArrayList<>();
-			if (metadata.isRGB() || !useColorLUTs())
+			if (tempChannelOptions.getFirst() instanceof RGBDirectChannelInfo || !useColorLUTs()) {
 				tempSelectedChannels.add(tempChannelOptions.getFirst());
-			else if (useColorLUTs())
+			} else if (useColorLUTs())
 				tempSelectedChannels.addAll(
 						tempChannelOptions.stream()
 						.filter(c -> c instanceof DirectServerChannelInfo).toList());
-		} else {
-			tempSelectedChannels = selectedChannels.stream()
-					.filter(tempChannelOptions::contains)
-					.toList();
 		}
 
 		if (!availableChannels.equals(tempChannelOptions)) {
@@ -775,6 +773,14 @@ public class ImageDisplay extends AbstractImageRenderer {
 				availableChannels.parallelStream()
 						.filter(c -> !(c instanceof DirectServerChannelInfo))
 						.forEach(this::autoSetDisplayRangeWithoutUpdate);
+				if (!server.isRGB()) {
+					// For direct 8-bit, non-RGB set using the min and max from the histogram
+					// This is intended to deal with labeled images, e.g. a pixel classifier's output -
+					// where the values are usually low
+					availableChannels.parallelStream()
+							.filter(c -> c instanceof DirectServerChannelInfo)
+							.forEach(c -> autoSetDisplayRange(c, 0));
+				}
 			} else {
 				availableChannels.parallelStream()
 						.forEach(this::autoSetDisplayRangeWithoutUpdate);
