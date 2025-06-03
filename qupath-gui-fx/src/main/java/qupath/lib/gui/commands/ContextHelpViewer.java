@@ -62,6 +62,7 @@ import qupath.lib.display.ImageDisplay;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.InfoMessage;
 import qupath.lib.gui.localization.QuPathResources;
+import qupath.lib.gui.panes.PreferencePane;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.tools.IconFactory;
 import qupath.lib.gui.tools.IconFactory.PathIcons;
@@ -293,6 +294,7 @@ public class ContextHelpViewer {
 	private List<HelpListEntry> createHelpEntries() {
 		return Arrays.asList(
 				createUnseenErrors(),
+				createMaskImageNames(),
 				createLargeNonPyramidal(),
 				createPixelSizeMissing(),
 				createPixelSizeLikelyDpi(),
@@ -722,7 +724,14 @@ public class ContextHelpViewer {
 				largeNonPyramidalImage);
 		return entry;
 	}
-	
+
+	private HelpListEntry createMaskImageNames() {
+		var entry = HelpListEntry.createWarning(
+				"ContextHelp.warning.maskImageNames");
+		entry.visibleProperty().bind(PathPrefs.maskImageNamesProperty());
+		return entry;
+	}
+
 	Node createIcon(PathIcons icon) {
 		return IconFactory.createNode(iconSize, iconSize, icon);
 	}
