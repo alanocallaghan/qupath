@@ -322,6 +322,7 @@ public class MeasurementExporter {
 	}
 
     private void exportZarr(File file) {
+		try {
 			if (imageList == null || imageList.isEmpty()) {
 				logger.warn("No images selected for export!");
 				return;
@@ -330,29 +331,16 @@ public class MeasurementExporter {
 			long startTime = System.currentTimeMillis();
 
 			int n = imageList.size();
-			var monitor = new ProgressMonitor(n+1, progressMonitor);
-        MeasurementTable table = null;
-        try {
-            table = createMeasurementTable(monitor);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        } catch (InterruptedException ex) {
-            throw new RuntimeException(ex);
-        }
+			var monitor = new ProgressMonitor(n + 1, progressMonitor);
+			MeasurementTable table = createMeasurementTable(monitor);
 
-        // todo chunks and data type
+			// todo chunks and data type
 			// todo ought to provide ability to export accompanying metadata
-        ZarrArray zarr = null;
-        try {
-            zarr = ZarrArray.create(file.toPath(), new ArrayParams()
-                    .shape(table.size(), table.getColumnNames().size())
-                    .dataType(DataType.f8)
-            );
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-
-        }
-        // todo write by row? or simply dump float values
+			ZarrArray zarr = ZarrArray.create(file.toPath(), new ArrayParams()
+						.shape(table.size(), table.getColumnNames().size())
+						.dataType(DataType.f8)
+				);
+			// todo write by row? or simply dump float values
 			int nColumns = table.getColumnNames().size();
 			List<Double> rowValues = new ArrayList<>();
 			int[] offset = {0, 0};
@@ -361,15 +349,26 @@ public class MeasurementExporter {
 				for (var h : table.getColumnNames()) {
 					rowValues.add(table.getDouble(row, h));
 				}
-                try {
-                    zarr.write(rowValues, new int[] {1, nColumns}, offset);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                } catch (InvalidRangeException e) {
-                    throw new RuntimeException(e);
-                }
-                offset[0]++;
+				// todo parallelize? chunk writing somehow?
+				zarr.write(rowValues.stream().mapToDouble(d -> d).toArray(), new int[]{1, nColumns}, offset);
+				offset[0]++;
 			}
+			monitor.complete();
+			long endTime = System.currentTimeMillis();
+
+			long timeMillis = endTime - startTime;
+			String time;
+			if (timeMillis > 1000*60)
+				time = String.format("Total processing time: %.2f minutes", timeMillis/(1000.0 * 60.0));
+			else if (timeMillis > 1000)
+				time = String.format("Total processing time: %.2f seconds", timeMillis/(1000.0));
+			else
+				time = String.format("Total processing time: %d ms", timeMillis);
+			logger.info("Processed {} images", imageList.size());
+			logger.info(time);
+		} catch (IOException | InterruptedException | InvalidRangeException ex) {
+			throw new RuntimeException(ex);
+		}
     }
 
 	private Predicate<String> createColumnPredicate() {

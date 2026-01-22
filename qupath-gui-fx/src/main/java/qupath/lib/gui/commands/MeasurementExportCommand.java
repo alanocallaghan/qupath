@@ -113,6 +113,10 @@ public class MeasurementExportCommand implements Runnable {
 		final String separator;
 		final String extension;
 		final String type;
+		@Override
+		public String toString() {
+			return type;
+		}
 
 		Format(String type, String extension, String separator) {
 			this.type = type;
