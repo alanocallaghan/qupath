@@ -98,11 +98,29 @@ public class MeasurementExportCommand implements Runnable {
 	// GUI
 	private final TextField outputText = new TextField();
 	private ComboBox<String> pathObjectCombo;
-	private ComboBox<String> separatorCombo;
+	private ComboBox<Format> separatorCombo;
 	private CheckComboBox<String> includeCombo;
 	
 	private final ButtonType btnExport = new ButtonType("Export", ButtonData.OK_DONE);
-	
+
+	private enum Format {
+		TAB_SEPARATED("TSV", ".tsv", "\t"),
+		COMMA_SEPARATED("CSV (comma-separated", ".csv", ","),
+		SEMICOLON_SEPARATED("CSV (semicolon-separated", ".csv", ";"),
+		H5("H5", ".h5", null),
+		ZARR("Zarr", ".zarr", null);
+
+		final String separator;
+		final String extension;
+		final String type;
+
+		Format(String type, String extension, String separator) {
+			this.type = type;
+			this.extension = extension;
+			this.separator = separator;
+		}
+	}
+
 	/**
 	 * Creates a simple GUI for MeasurementExporter.
 	 * @param qupath the main QuPath instance
@@ -145,15 +163,13 @@ public class MeasurementExportCommand implements Runnable {
 		Label pathOutputLabel = new Label("Output file");
 		var btnChooseFile = new Button("Choose");
 		btnChooseFile.setOnAction(e -> {
-			String extSelected = separatorCombo.getSelectionModel().getSelectedItem();
-			String ext = extSelected.equals("Tab (.tsv)") ? ".tsv" : ".csv";
-			String extDesc = ext.equals(".tsv") ? "TSV (Tab delimited)" : "CSV (Comma delimited)";
+			Format formatSelected = separatorCombo.getSelectionModel().getSelectedItem();
 			File pathOut = FileChoosers.promptToSaveFile("Output file",
-					new File(Projects.getBaseDirectory(project), "measurements" + ext),
-					FileChoosers.createExtensionFilter(extDesc, ext));
+					new File(Projects.getBaseDirectory(project), "measurements" + formatSelected.extension),
+					FileChoosers.createExtensionFilter(formatSelected.type, formatSelected.extension));
 			if (pathOut != null) {
 				if (pathOut.isDirectory())
-					pathOut = new File(pathOut.getAbsolutePath() + File.separator + "measurements" + ext);
+					pathOut = new File(pathOut.getAbsolutePath() + File.separator + "measurements" + formatSelected.extension);
 				outputText.setText(pathOut.getAbsolutePath());
 			}
 		});
@@ -177,7 +193,7 @@ public class MeasurementExportCommand implements Runnable {
 
 		Label separatorLabel = new Label("Separator");
 		separatorLabel.setLabelFor(separatorCombo);
-		separatorCombo.getItems().setAll("Tab (.tsv)", "Comma (.csv)", "Semicolon (.csv)");
+		separatorCombo.getItems().setAll(Format.values());
 		separatorCombo.getSelectionModel().selectFirst();
 		GridPaneUtils.addGridRow(optionPane, row++, 0, "Choose a value separator", separatorLabel, separatorCombo, separatorCombo, separatorCombo, separatorCombo);
 		
@@ -220,10 +236,7 @@ public class MeasurementExportCommand implements Runnable {
 			if (n == null)
 				return;
 			String currentOut = outputText.getText();
-			if (n.equals("Tab (.tsv)") && currentOut.endsWith(".csv"))
-				outputText.setText(currentOut.replace(".csv", ".tsv"));
-			else if ((n.equals("Comma (.csv)") || n.equals("Semicolon (.csv)")) && currentOut.endsWith(".tsv"))
-				outputText.setText(currentOut.replace(".tsv", ".csv"));
+			outputText.setText(currentOut.replace(o.extension, n.extension));
 		});
 
 		FXUtils.getContentsOfType(optionPane, Label.class, false).forEach(e -> e.setMinWidth(160));
@@ -256,12 +269,12 @@ public class MeasurementExportCommand implements Runnable {
 		String curExt = GeneralTools.getExtension(outputText.getText()).orElse("");
 		if (!curExt.equals(".csv") && !curExt.equals(".tsv")) {
 			// Fix extension, if required
-			String extSelected = separatorCombo.getSelectionModel().getSelectedItem();
-			String ext = extSelected.equals("Tab (.tsv)") ? ".tsv" : ".csv";
-			outputText.setText(outputText.getText().substring(0, outputText.getText().length() - curExt.length()) + ext);
+			Format formatSelected = separatorCombo.getSelectionModel().getSelectedItem();
+			outputText.setText(outputText.getText().substring(0, outputText.getText().length() - curExt.length()) + formatSelected.extension);
 		}
 		
 		if (new File(outputText.getText()).getParent() == null) {
+			// todo deal with binary formats here
 			String ext = GeneralTools.getExtension(outputText.getText()).orElse("").equals(".tsv") ? ".tsv": ".csv";
 			String extDesc = ext.equals(".tsv") ? "TSV (Tab delimited)" : "CSV (Comma delimited)";
 			File pathOut = FileChoosers.promptToSaveFile("Output file",
@@ -277,12 +290,7 @@ public class MeasurementExportCommand implements Runnable {
 		String[] include = checkedItems.stream().toList().toArray(new String[checkedItems.size()]);
 		String separator = PathPrefs.tableDelimiterProperty().get();
 
-        separator = switch (separatorCombo.getSelectionModel().getSelectedItem()) {
-            case "Tab (.tsv)" -> "\t";
-            case "Comma (.csv)" -> ",";
-            case "Semicolon (.csv)" -> ";";
-            default -> separator;
-        };
+        separator = separatorCombo.getSelectionModel().getSelectedItem().separator;
 		
 		MeasurementExporter exporter = new MeasurementExporter()
 			.imageList(listSelectionView.getTargetItems())

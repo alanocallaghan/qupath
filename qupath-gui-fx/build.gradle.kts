@@ -16,6 +16,7 @@ dependencies {
   api(project(":qupath-core-processing"))
 
   api(libs.controlsfx)
+  implementation("dev.zarr:jzarr:0.4.2")
 
   implementation(libs.qupath.fxtras)
 

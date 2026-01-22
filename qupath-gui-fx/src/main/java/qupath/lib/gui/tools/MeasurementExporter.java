@@ -21,8 +21,12 @@
 
 package qupath.lib.gui.tools;
 
+import com.bc.zarr.ArrayParams;
+import com.bc.zarr.DataType;
+import com.bc.zarr.ZarrArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.measure.ObservableMeasurementTableData;
 import qupath.lib.images.ImageData;
 import qupath.lib.lazy.interfaces.LazyValue;
@@ -54,6 +58,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.DoubleConsumer;
 import java.util.function.Predicate;
+import ucar.ma2.InvalidRangeException;
 
 
 /**
@@ -305,12 +310,67 @@ public class MeasurementExporter {
 	 * @throws IOException if the export files
 	 */
 	public void exportMeasurements(File file) throws IOException, InterruptedException {
-		try (var fos = new FileOutputStream(file)) {
-			doExport(fos, getSeparatorToUse(file.getName()));
-		} catch (Exception e) {
-			throw new IOException("Error exporting measurements", e);
+		if (Set.of(".csv", ".tsv").contains(GeneralTools.getExtension(file).orElse(""))) {
+			try (var fos = new FileOutputStream(file)) {
+				exportDelimited(fos, getSeparatorToUse(file.getName()));
+			} catch (Exception e) {
+				throw new IOException("Error exporting measurements", e);
+			}
+		} else {
+			exportZarr(file);
 		}
 	}
+
+    private void exportZarr(File file) {
+			if (imageList == null || imageList.isEmpty()) {
+				logger.warn("No images selected for export!");
+				return;
+			}
+
+			long startTime = System.currentTimeMillis();
+
+			int n = imageList.size();
+			var monitor = new ProgressMonitor(n+1, progressMonitor);
+        MeasurementTable table = null;
+        try {
+            table = createMeasurementTable(monitor);
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        } catch (InterruptedException ex) {
+            throw new RuntimeException(ex);
+        }
+
+        // todo chunks and data type
+			// todo ought to provide ability to export accompanying metadata
+        ZarrArray zarr = null;
+        try {
+            zarr = ZarrArray.create(file.toPath(), new ArrayParams()
+                    .shape(table.size(), table.getColumnNames().size())
+                    .dataType(DataType.f8)
+            );
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+
+        }
+        // todo write by row? or simply dump float values
+			int nColumns = table.getColumnNames().size();
+			List<Double> rowValues = new ArrayList<>();
+			int[] offset = {0, 0};
+			for (int row = 0; row < table.size(); row++) {
+				rowValues.clear();
+				for (var h : table.getColumnNames()) {
+					rowValues.add(table.getDouble(row, h));
+				}
+                try {
+                    zarr.write(rowValues, new int[] {1, nColumns}, offset);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                } catch (InvalidRangeException e) {
+                    throw new RuntimeException(e);
+                }
+                offset[0]++;
+			}
+    }
 
 	private Predicate<String> createColumnPredicate() {
 		if (!includeOnlyColumns.isEmpty()) {
@@ -380,11 +440,12 @@ public class MeasurementExporter {
 	 * @throws IOException if the export fails
 	 */
 	public void exportMeasurements(OutputStream stream) throws IOException, InterruptedException {
-		doExport(stream, getSeparatorToUse(null));
+		// todo separate into delimited/not forms
+		exportDelimited(stream, getSeparatorToUse(null));
 	}
 
 
-	private void doExport(OutputStream stream, String separator) throws IOException, InterruptedException {
+	private void exportDelimited(OutputStream stream, String separator) throws IOException, InterruptedException {
 		if (imageList == null || imageList.isEmpty()) {
 			logger.warn("No images selected for export!");
 			return;
@@ -488,8 +549,17 @@ public class MeasurementExporter {
 			return headerList;
 		}
 
-
 		String getString(int row, String column, int nDecimalPlaces) {
+			var item = getItemForRow(row);
+			return tableModel.getStringValue(item, column, nDecimalPlaces);
+		}
+
+		double getDouble(int row, String column) {
+			var item = getItemForRow(row);
+			return tableModel.getNumericValue(item, column);
+		}
+
+		private PathObject getItemForRow(int row) {
 			List<Integer> sizes = sizes();
 			int[] cumSum = cumSum(sizes);
 			int imageIndex = 0, rowIndex = 0;
@@ -507,8 +577,7 @@ public class MeasurementExporter {
 				}
 			}
 			ensureLoaded(imageIndex);
-			var item = tableModel.getItems().get(rowIndex);
-			return tableModel.getStringValue(item, column, nDecimalPlaces);
+			return tableModel.getItems().get(rowIndex);
 		}
 
 		private void ensureLoaded(int i) {
