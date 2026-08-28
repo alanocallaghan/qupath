@@ -12,6 +12,7 @@ base {
 
 dependencies {
   api(project(":qupath-core"))
+  implementation("org.tribuo:tribuo-classification-xgboost:4.3.2")
 
   api(libs.opencv)
   api(libs.imagej)

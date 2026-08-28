@@ -96,6 +96,7 @@ import qupath.opencv.ml.ConfusionMatrix;
 import qupath.opencv.ml.FeaturePreprocessor;
 import qupath.opencv.ml.models.OpenCVClassifiers;
 import qupath.opencv.ml.models.OpenCVStatModel;
+import qupath.opencv.ml.models.XGBoostClassifier;
 import qupath.opencv.ml.pixel.PixelClassifiers;
 import qupath.opencv.ops.ImageDataOp;
 import qupath.opencv.ops.ImageOps;
@@ -445,7 +446,8 @@ public class PixelClassifierPane {
 						OpenCVClassifiers.createStatModel(ANN_MLP.class),
 						OpenCVClassifiers.createStatModel(LogisticRegression.class),
 						OpenCVClassifiers.createStatModel(RTrees.class)
-				)
+				),
+				new XGBoostClassifier()
 		);
 
 		comboClassifier.getSelectionModel().clearAndSelect(1);
