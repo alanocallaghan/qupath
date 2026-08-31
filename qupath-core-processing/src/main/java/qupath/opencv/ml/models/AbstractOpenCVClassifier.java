@@ -1,6 +1,5 @@
 package qupath.opencv.ml.models;
 
-import com.google.gson.annotations.JsonAdapter;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.bytedeco.javacpp.indexer.IntIndexer;
 import org.bytedeco.opencv.global.opencv_core;
@@ -29,11 +28,10 @@ import qupath.opencv.io.OpenCVTypeAdapters;
  * @implNote For compatibility with QuPath v0.7.0 and earlier, the default JSON serialization
  *           stores only the StatModel that is wrapped, not any associated parameters.
  */
-public abstract class OpenCVStatModel<T extends StatModel> implements TrainableModel {
+abstract class AbstractOpenCVClassifier<T extends StatModel> implements TrainableModel {
 
-    private static final Logger logger = LoggerFactory.getLogger(OpenCVStatModel.class);
+    private static final Logger logger = LoggerFactory.getLogger(AbstractOpenCVClassifier.class);
 
-    @JsonAdapter(OpenCVTypeAdapters.OpenCVTypeAdaptorFactory.class)
     private T model;
     private transient ParameterList params; // Should take defaults from the serialized model
 
@@ -45,9 +43,9 @@ public abstract class OpenCVStatModel<T extends StatModel> implements TrainableM
 
     abstract void updateModel(T model, ParameterList params, TrainData trainData);
 
-    OpenCVStatModel() {}
+    AbstractOpenCVClassifier() {}
 
-    OpenCVStatModel(T model) {
+    AbstractOpenCVClassifier(T model) {
         this.model = model;
         params = createParameterList(model);
     }

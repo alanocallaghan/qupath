@@ -56,7 +56,8 @@ import qupath.opencv.dnn.DnnModel;
 import qupath.opencv.dnn.DnnShape;
 import qupath.opencv.dnn.PredictionFunction;
 import qupath.opencv.ml.FeaturePreprocessor;
-import qupath.opencv.ml.models.OpenCVStatModel;
+import qupath.opencv.ml.models.OpenCVClassifiers;
+import qupath.opencv.ml.models.OpenCVTrainableModel;
 import qupath.opencv.ml.models.PredictionModel;
 import qupath.opencv.tools.LocalNormalization;
 import qupath.opencv.tools.MultiscaleFeatures.MultiscaleFeature;
@@ -3095,7 +3096,7 @@ public class ImageOps {
 	public static class ML {
 		
 		/**
-		 * Apply am {@link OpenCVStatModel} to pixels to generate a prediction.
+		 * Apply am {@link OpenCVTrainableModel} to pixels to generate a prediction.
 		 * @param statModel
 		 * @param requestProbabilities
 		 * @return
@@ -3103,14 +3104,14 @@ public class ImageOps {
 		 * @deprecated since v0.8.0
 		 */
 		@Deprecated
-		public static ImageOp statModel(OpenCVStatModel<?> statModel, boolean requestProbabilities) {
-			return new StatModelOp(statModel, requestProbabilities);
+		public static ImageOp statModel(OpenCVTrainableModel<? extends StatModel> statModel, boolean requestProbabilities) {
+			return new StatModelOp(statModel.getStatModel(), requestProbabilities);
 		}
 
 		/**
 		 * Apply a {@link PredictionModel} to pixels to generate a prediction.
 		 * <p>
-		 * This replaces {@link #statModel(OpenCVStatModel, boolean)} in v0.8.0,
+		 * This replaces {@link #statModel(OpenCVTrainableModel, boolean)} in v0.8.0,
 		 * because it is more flexible.
 		 * @param model
 		 * @param requestProbabilities
@@ -3340,10 +3341,11 @@ public class ImageOps {
 		@OpType("opencv-statmodel")
 		static class StatModelOp implements ImageOp {
 
-			private OpenCVStatModel<?> model;
+			private StatModel model;
 			private boolean requestProbabilities;
+			private volatile transient PredictionModelOp op;
 			
-			StatModelOp(OpenCVStatModel<?> model, boolean requestProbabilities) {
+			StatModelOp(StatModel model, boolean requestProbabilities) {
 				this.model = model;
 				this.requestProbabilities = requestProbabilities;
 			}
@@ -3351,12 +3353,24 @@ public class ImageOps {
 			@SuppressWarnings("unchecked")
 			@Override
 			public Mat apply(Mat input) {
-				return applyPredictionModel(model, input, input, requestProbabilities);
+				return getPredictionOp().apply(input);
+			}
+
+			private ImageOp getPredictionOp() {
+				if (op == null) {
+					synchronized (this) {
+						if (op == null)
+							op = new PredictionModelOp(
+									OpenCVClassifiers.wrapStatModel(model),
+									requestProbabilities);
+					}
+				}
+				return op;
 			}
 
 			@Override
 			public PixelType getOutputType(PixelType inputType) {
-				return model.getOutputType(requestProbabilities);
+				return getPredictionOp().getOutputType(inputType);
 			}
 
 		}
