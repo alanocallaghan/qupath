@@ -1,18 +1,20 @@
-package qupath.opencv.ml.models;
+package qupath.opencv.ml.models.statmodel;
 
-import com.google.gson.annotations.JsonAdapter;
+import java.util.List;
 import java.util.Objects;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_ml.StatModel;
 import org.bytedeco.opencv.opencv_ml.TrainData;
 import qupath.lib.images.servers.PixelType;
 import qupath.lib.plugins.parameters.ParameterList;
+import qupath.opencv.ml.models.TrainableModel;
+import qupath.opencv.ml.models.FeatureImportance;
 
 /**
  * A trainable model that uses an OpenCV {@code StatModel} for prediction.
  * @param <T> the type of the StatModel.
  */
-public class OpenCVTrainableModel<T extends StatModel> implements TrainableModel {
+public class TrainableStatModel<T extends StatModel> implements TrainableModel {
 
     private transient volatile AbstractOpenCVClassifier<T> wrapper;
 
@@ -21,12 +23,12 @@ public class OpenCVTrainableModel<T extends StatModel> implements TrainableModel
     // For example, see https://github.com/google/gson/issues/2563
     private final StatModel model;
 
-    OpenCVTrainableModel(T model) {
+    TrainableStatModel(T model) {
         this.model = model;
-        this.wrapper = OpenCVClassifiers.wrap(model); // Call here so that any exception would be thrown early
+        this.wrapper = OpenCVStatModels.wrap(model); // Call here so that any exception would be thrown early
     }
 
-    OpenCVTrainableModel(AbstractOpenCVClassifier<T> wrapper) {
+    TrainableStatModel(AbstractOpenCVClassifier<T> wrapper) {
         Objects.requireNonNull(wrapper);
         this.wrapper = wrapper;
         this.model = wrapper.getStatModel();
@@ -36,7 +38,7 @@ public class OpenCVTrainableModel<T extends StatModel> implements TrainableModel
         if (wrapper == null) {
             synchronized (this) {
                 if (wrapper == null) {
-                    wrapper = OpenCVClassifiers.wrap(getStatModel());
+                    wrapper = OpenCVStatModels.wrap(getStatModel());
                 }
             }
         }
@@ -98,8 +100,13 @@ public class OpenCVTrainableModel<T extends StatModel> implements TrainableModel
     }
 
     @Override
-    public PixelType getOutputType(boolean requestProbabilities) {
-        return getWrapper().getOutputType(requestProbabilities);
+    public PixelType getOutputType() {
+        return getWrapper().getOutputType();
+    }
+
+    @Override
+    public List<FeatureImportance> getFeatureImportance(List<String> names) {
+        return getWrapper().getFeatureImportance(names);
     }
 
     @Override

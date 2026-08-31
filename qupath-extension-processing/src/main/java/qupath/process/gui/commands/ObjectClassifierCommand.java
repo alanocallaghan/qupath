@@ -69,9 +69,6 @@ import org.bytedeco.javacpp.indexer.UByteIndexer;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Scalar;
-import org.bytedeco.opencv.opencv_ml.ANN_MLP;
-import org.bytedeco.opencv.opencv_ml.KNearest;
-import org.bytedeco.opencv.opencv_ml.RTrees;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.fx.controls.PredicateTextField;
@@ -98,10 +95,9 @@ import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.objects.hierarchy.events.PathObjectHierarchyEvent;
 import qupath.lib.objects.hierarchy.events.PathObjectHierarchyListener;
 import qupath.lib.projects.ProjectImageEntry;
-import qupath.opencv.ml.models.OpenCVClassifiers;
-import qupath.opencv.ml.models.PredictionModel;
+import qupath.opencv.ml.models.FeatureImportance;
+import qupath.opencv.ml.models.statmodel.OpenCVStatModels;
 import qupath.opencv.ml.models.TrainableModel;
-import qupath.opencv.ml.models.RTreesClassifier;
 import qupath.opencv.ml.objects.OpenCVMLClassifier;
 import qupath.opencv.ml.objects.features.FeatureExtractor;
 import qupath.opencv.ml.objects.features.FeatureExtractors;
@@ -982,12 +978,9 @@ public class ObjectClassifierCommand implements Runnable {
 				// Train the classifier - we don't want to enclose this in a PointerScope in case 
 				// new persistent objects are created (e.g. the StatModel)
 				trainClassifier(classifier, matAllFeatures, matAllTargets, nClasses, doMulticlass);
-	
-				if (classifier instanceof RTreesClassifier) {
-					tryLoggingVariableImportance((RTreesClassifier)classifier, extractor);
-				}
+				tryLoggingVariableImportance(classifier, extractor);
 			} catch (Exception e) {
-				logger.error(e.getLocalizedMessage(), e);
+				logger.error(e.getMessage(), e);
 			} finally {
 				matAllFeatures.close();
 				matAllTargets.close();
@@ -1008,8 +1001,12 @@ public class ObjectClassifierCommand implements Runnable {
 		}
 
 
-		static void tryLoggingVariableImportance(final RTreesClassifier trees, final FeatureExtractor<?> extractor) {
-			trees.logVariableImportance(extractor.getFeatureNames());
+		static void tryLoggingVariableImportance(final TrainableModel model, final FeatureExtractor<?> extractor) {
+			var importance = model.getFeatureImportance(extractor.getFeatureNames());
+			if (importance.isEmpty())
+				return;
+			importance.stream().sorted(Comparator.comparingDouble(FeatureImportance::importance).reversed())
+					.forEach(i -> logger.info("{}: {}", i.name(), i.importance()));
 		}
 
 
@@ -1155,10 +1152,9 @@ public class ObjectClassifierCommand implements Runnable {
 			var labelClassifier = new Label("Classifier");
 			var comboClassifier = new ComboBox<TrainableModel>();
 			comboClassifier.getItems().addAll(
-					OpenCVClassifiers.createStatModel(RTrees.class),
-					OpenCVClassifiers.createStatModel(ANN_MLP.class),
-					//					OpenCVClassifiers.createMulticlassStatModel(ANN_MLP.class),
-					OpenCVClassifiers.createStatModel(KNearest.class)
+					OpenCVStatModels.Models.R_TREES.createTrainableModel(),
+					OpenCVStatModels.Models.ANN.createTrainableModel(),
+					OpenCVStatModels.Models.KNN.createTrainableModel()
 					);
 			labelClassifier.setLabelFor(comboClassifier);
 			selectedModel = comboClassifier.getSelectionModel().selectedItemProperty();

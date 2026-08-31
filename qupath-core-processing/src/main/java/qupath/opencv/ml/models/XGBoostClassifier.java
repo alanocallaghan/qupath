@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.TypeAdapter;
 import com.google.gson.annotations.JsonAdapter;
+import com.google.gson.internal.bind.ReflectiveTypeAdapterFactory;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
@@ -31,7 +32,7 @@ import qupath.opencv.tools.OpenCVTools;
 public class XGBoostClassifier implements TrainableModel {
     private static final Logger logger = LoggerFactory.getLogger(XGBoostClassifier.class);
 
-    private ParameterList params;
+    private final transient ParameterList params;
     private boolean isTrained = false;
     @JsonAdapter(BoosterTypeAdapter.class)
     private Booster booster;
@@ -299,7 +300,6 @@ public class XGBoostClassifier implements TrainableModel {
                 {
                     putAll(params.getKeyValueParameters(true));
                     put("validate_parameters", true);
-                    // todo set parameters from list
                     put("device", "cuda");
                     put("objective", "multi:softmax");
                     put("num_class", trainData.getClassLabels().rows());
@@ -341,8 +341,25 @@ public class XGBoostClassifier implements TrainableModel {
     }
 
     @Override
-    public PixelType getOutputType(boolean requestProbabilities) {
+    public PixelType getOutputType() {
         return PixelType.FLOAT32;
+    }
+
+    @Override
+    public Map<String, String> getDetails() {
+        return TrainableModel.super.getDetails();
+    }
+
+    @Override
+    public List<FeatureImportance> getFeatureImportance(List<String> names) {
+        String[] namesArray = names.toArray(new String[0]);
+        try {
+            var map = booster.getFeatureScore(namesArray);
+            return map.entrySet().stream()
+                    .map(es -> new FeatureImportance(es.getKey(), es.getValue())).toList();
+        } catch (XGBoostError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -359,7 +376,7 @@ public class XGBoostClassifier implements TrainableModel {
             }
             ByteArrayOutputStream outStream = new ByteArrayOutputStream();
             try {
-                booster.saveModel(outStream);
+                outStream.writeBytes(booster.toByteArray("json"));
             } catch (XGBoostError e) {
                 throw new RuntimeException(e);
             }

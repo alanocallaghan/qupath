@@ -1,8 +1,9 @@
-package qupath.opencv.ml.models;
+package qupath.opencv.ml.models.statmodel;
 
 import java.nio.IntBuffer;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Map;
 import org.bytedeco.javacpp.indexer.DoubleIndexer;
 import org.bytedeco.javacpp.indexer.FloatIndexer;
 import org.bytedeco.opencv.global.opencv_core;
@@ -20,7 +21,7 @@ import qupath.opencv.tools.OpenCVTools;
 /**
  * Classifier based on {@link ANN_MLP}.
  */
-public class ANNClassifier extends AbstractOpenCVClassifier<ANN_MLP> {
+class ANNClassifier extends AbstractOpenCVClassifier<ANN_MLP> {
 
     private static final Logger logger = LoggerFactory.getLogger(ANNClassifier.class);
 
@@ -88,7 +89,7 @@ public class ANNClassifier extends AbstractOpenCVClassifier<ANN_MLP> {
             params.addIntParameter("hidden" + i, "Layer " + i, layerSizes[i - 1], "Nodes", "Size of first hidden layer (0 to omit layer)");
         }
 
-        OpenCVClassifiers.addTerminationCriteriaParameters(params, model.getTermCriteria());
+        OpenCVStatModels.addTerminationCriteriaParameters(params, model.getTermCriteria());
 
         return params;
     }
@@ -137,6 +138,19 @@ public class ANNClassifier extends AbstractOpenCVClassifier<ANN_MLP> {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    @Override
+    protected void updateDetails(Map<String, String> map) {
+        super.updateDetails(map);
+        int[] layers = getLayerSizes();
+        String postfix = "";
+        if (layers.length >= 2) {
+            postfix = layers.length == 3 ?
+                    "   (1 hidden layer)" :
+                    "   (" + (layers.length - 2) + " hidden)";
+        }
+        map.put("Layers", Arrays.toString(layers) + postfix);
     }
 
     @Override
@@ -267,7 +281,7 @@ public class ANNClassifier extends AbstractOpenCVClassifier<ANN_MLP> {
 //			model.setTrainMethod(trainMethod.getTrainingMethod(), param1, param2);
 
         // Set termination criterion
-        model.setTermCriteria(OpenCVClassifiers.updateTermCriteria(params, model.getTermCriteria()));
+        model.setTermCriteria(OpenCVStatModels.updateTermCriteria(params, model.getTermCriteria()));
 
         logger.debug("Initializing ANN with layer sizes: " + GeneralTools.arrayToString(Locale.getDefault(Locale.Category.FORMAT), layers, 0));
     }

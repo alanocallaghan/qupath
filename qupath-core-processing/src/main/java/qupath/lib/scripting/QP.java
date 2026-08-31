@@ -109,6 +109,7 @@ import qupath.opencv.dnn.DnnModels;
 import qupath.opencv.dnn.DnnTools;
 import qupath.opencv.io.OpenCVTypeAdapters;
 import qupath.opencv.ml.BioimageIoTools;
+import qupath.opencv.ml.models.XGBoostClassifier;
 import qupath.opencv.ml.objects.OpenCVMLClassifier;
 import qupath.opencv.ml.objects.features.FeatureExtractors;
 import qupath.opencv.ml.pixel.PixelClassifierTools;
@@ -251,7 +252,7 @@ public class QP {
 			.registerTypeAdapterFactory(ObjectClassifiers.getTypeAdapterFactory())
 			.registerTypeAdapterFactory(OpenCVTypeAdapters.getOpenCVTypeAdaptorFactory())
 			.registerTypeAdapter(ColorTransforms.ColorTransform.class, new ColorTransforms.ColorTransformTypeAdapter());
-		
+		OpenCVTypeAdapters.registerPredictionModel(XGBoostClassifier.class);
 		// Currently, the type adapters are registered within the class... so we need to initialize the class
 		@SuppressWarnings("unused")
 		var init = new ImageOps();

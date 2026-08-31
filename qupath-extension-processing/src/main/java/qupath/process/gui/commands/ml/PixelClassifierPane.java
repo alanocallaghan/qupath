@@ -21,6 +21,7 @@
 
 package qupath.process.gui.commands.ml;
 
+import java.nio.FloatBuffer;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Random;
@@ -60,11 +61,6 @@ import org.bytedeco.javacpp.PointerScope;
 import org.bytedeco.javacpp.indexer.FloatIndexer;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.opencv_core.Mat;
-import org.bytedeco.opencv.opencv_core.TermCriteria;
-import org.bytedeco.opencv.opencv_ml.ANN_MLP;
-import org.bytedeco.opencv.opencv_ml.KNearest;
-import org.bytedeco.opencv.opencv_ml.LogisticRegression;
-import org.bytedeco.opencv.opencv_ml.RTrees;
 import org.bytedeco.opencv.opencv_ml.TrainData;
 import org.controlsfx.glyphfont.FontAwesome;
 import org.slf4j.Logger;
@@ -94,8 +90,8 @@ import qupath.lib.objects.hierarchy.events.PathObjectHierarchyEvent;
 import qupath.lib.objects.hierarchy.events.PathObjectHierarchyListener;
 import qupath.opencv.ml.ConfusionMatrix;
 import qupath.opencv.ml.FeaturePreprocessor;
-import qupath.opencv.ml.models.OpenCVClassifiers;
 import qupath.opencv.ml.models.XGBoostClassifier;
+import qupath.opencv.ml.models.statmodel.OpenCVStatModels;
 import qupath.opencv.ml.models.PredictionModel;
 import qupath.opencv.ml.models.TrainableModel;
 import qupath.opencv.ml.pixel.PixelClassifiers;
@@ -439,10 +435,10 @@ public class PixelClassifierPane {
 		var labelClassifier = createFixedWidthLabelForNode("Classifier", comboClassifier);
 
 		comboClassifier.getItems().addAll(
-				OpenCVClassifiers.createStatModel(RTrees.class),
-				OpenCVClassifiers.createStatModel(ANN_MLP.class),
-				OpenCVClassifiers.createStatModel(LogisticRegression.class),
-				OpenCVClassifiers.createStatModel(KNearest.class),
+				OpenCVStatModels.Models.R_TREES.createTrainableModel(),
+				OpenCVStatModels.Models.ANN.createTrainableModel(),
+				OpenCVStatModels.Models.LOGISTIC_REGRESSION.createTrainableModel(),
+				OpenCVStatModels.Models.KNN.createTrainableModel(),
 				new XGBoostClassifier()
 		);
 
@@ -696,8 +692,6 @@ public class PixelClassifierPane {
 	 * <p>
 	 * Note that the builder will only be added if it is not already present.
 	 * @param builder the builder to be installed
-	 * 
-	 * @return true if the builder was added, false otherwise.
 	 */
 	public static synchronized void installDefaultFeatureClassificationBuilder(ImageDataOpBuilder builder) {
 		if (!Platform.isFxApplicationThread()) {
@@ -850,13 +844,7 @@ public class PixelClassifierPane {
 			logger.warn("Can't compute variable importance without an image open");
 			return;
 		}
-		try (var rtrees = RTrees.create()) {
-			rtrees.setMaxDepth(0);
-			rtrees.setTermCriteria(
-					new TermCriteria(TermCriteria.COUNT, 100, 0));
-			rtrees.setCalculateVarImportance(true);
-
-			var model = OpenCVClassifiers.wrapStatModel(rtrees);
+		try (var model = OpenCVStatModels.Models.R_TREES.createTrainableModel()) {
 			List<ClassifierTrainingData> allTrainingData = helper.createTrainingData(trainingImages);
 			if (allTrainingData.isEmpty()) {
 				logger.warn("Can't compute variable importance without training data!");
@@ -924,14 +912,25 @@ public class PixelClassifierPane {
 
 		var testResults = new Mat();
 		model.predict(samples, testResults, new Mat());
-		IntBuffer bufferPrediction = testResults.createBuffer();
-		int nTest = testResults.rows();
-		for (int i = 0; i < nTest; i++) {
-			int targetClassInd = bufferClassList.get(bufferGroundTruth.get(i));
-			confusion.accumulate(
-					pathClasses[targetClassInd],
-					pathClasses[bufferPrediction.get(i)]
-			);
+		// todo if floatbuffer
+		if (testResults.createBuffer() instanceof IntBuffer bufferPrediction) {
+			int nTest = testResults.rows();
+			for (int i = 0; i < nTest; i++) {
+				int targetClassInd = bufferClassList.get(bufferGroundTruth.get(i));
+				confusion.accumulate(
+						pathClasses[targetClassInd],
+						pathClasses[bufferPrediction.get(i)]
+				);
+			}
+		} else if (testResults.createBuffer() instanceof FloatBuffer bufferPrediction) {
+			int nTest = testResults.rows();
+			for (int i = 0; i < nTest; i++) {
+				int targetClassInd = bufferClassList.get(bufferGroundTruth.get(i));
+				confusion.accumulate(
+						pathClasses[targetClassInd],
+						pathClasses[(int) bufferPrediction.get(i)]
+				);
+			}
 		}
 		return confusion;
 	}

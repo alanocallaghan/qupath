@@ -1,4 +1,4 @@
-package qupath.opencv.ml.models;
+package qupath.opencv.ml.models.statmodel;
 
 import java.util.Arrays;
 import org.bytedeco.opencv.global.opencv_core;
@@ -11,9 +11,9 @@ import qupath.lib.plugins.parameters.ParameterList;
 /**
  * Classifier based on {@link LogisticRegression}.
  */
-public class LogisticRegressionClassifier extends AbstractOpenCVClassifier<LogisticRegression> {
+class LogisticRegressionClassifier extends AbstractOpenCVClassifier<LogisticRegression> {
 
-    static enum Regularization {
+    enum Regularization {
         DISABLE, L1, L2;
 
         public int getRegularization() {
@@ -63,7 +63,7 @@ public class LogisticRegressionClassifier extends AbstractOpenCVClassifier<Logis
 //			params.addIntParameter("miniBatchSize", "Mini batch size", miniBatchSize);
         params.addChoiceParameter("regularization", "Regularization", defaultReg, Arrays.asList(Regularization.values()));
 
-        OpenCVClassifiers.addTerminationCriteriaParameters(params, model.getTermCriteria());
+        OpenCVStatModels.addTerminationCriteriaParameters(params, model.getTermCriteria());
         return params;
     }
 
@@ -93,7 +93,7 @@ public class LogisticRegressionClassifier extends AbstractOpenCVClassifier<Logis
         model.setLearningRate(learningRate);
         model.setIterations(nIterations);
 
-        model.setTermCriteria(OpenCVClassifiers.updateTermCriteria(params, model.getTermCriteria()));
+        model.setTermCriteria(OpenCVStatModels.updateTermCriteria(params, model.getTermCriteria()));
     }
 
 }

@@ -56,8 +56,8 @@ import qupath.opencv.dnn.DnnModel;
 import qupath.opencv.dnn.DnnShape;
 import qupath.opencv.dnn.PredictionFunction;
 import qupath.opencv.ml.FeaturePreprocessor;
-import qupath.opencv.ml.models.OpenCVClassifiers;
-import qupath.opencv.ml.models.OpenCVTrainableModel;
+import qupath.opencv.ml.models.statmodel.OpenCVStatModels;
+import qupath.opencv.ml.models.statmodel.TrainableStatModel;
 import qupath.opencv.ml.models.PredictionModel;
 import qupath.opencv.tools.LocalNormalization;
 import qupath.opencv.tools.MultiscaleFeatures.MultiscaleFeature;
@@ -3096,7 +3096,7 @@ public class ImageOps {
 	public static class ML {
 		
 		/**
-		 * Apply am {@link OpenCVTrainableModel} to pixels to generate a prediction.
+		 * Apply am {@link TrainableStatModel} to pixels to generate a prediction.
 		 * @param statModel
 		 * @param requestProbabilities
 		 * @return
@@ -3104,14 +3104,14 @@ public class ImageOps {
 		 * @deprecated since v0.8.0
 		 */
 		@Deprecated
-		public static ImageOp statModel(OpenCVTrainableModel<? extends StatModel> statModel, boolean requestProbabilities) {
+		public static ImageOp statModel(TrainableStatModel<? extends StatModel> statModel, boolean requestProbabilities) {
 			return new StatModelOp(statModel.getStatModel(), requestProbabilities);
 		}
 
 		/**
 		 * Apply a {@link PredictionModel} to pixels to generate a prediction.
 		 * <p>
-		 * This replaces {@link #statModel(OpenCVTrainableModel, boolean)} in v0.8.0,
+		 * This replaces {@link #statModel(TrainableStatModel, boolean)} in v0.8.0,
 		 * because it is more flexible.
 		 * @param model
 		 * @param requestProbabilities
@@ -3331,7 +3331,10 @@ public class ImageOps {
 
 			@Override
 			public PixelType getOutputType(PixelType inputType) {
-				return model.getOutputType(requestProbabilities);
+				if (requestProbabilities)
+					return PixelType.FLOAT32;
+				else
+					return model.getOutputType();
 			}
 
 		}
@@ -3361,7 +3364,7 @@ public class ImageOps {
 					synchronized (this) {
 						if (op == null)
 							op = new PredictionModelOp(
-									OpenCVClassifiers.wrapStatModel(model),
+									OpenCVStatModels.wrapStatModel(model),
 									requestProbabilities);
 					}
 				}
