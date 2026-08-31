@@ -24,10 +24,11 @@ import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_ml.TrainData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.images.servers.PixelType;
 import qupath.lib.plugins.parameters.ParameterList;
 import qupath.opencv.tools.OpenCVTools;
 
-public class XGBoostClassifier implements OpenCVStatModel {
+public class XGBoostClassifier implements TrainableModel {
     private static final Logger logger = LoggerFactory.getLogger(XGBoostClassifier.class);
 
     private ParameterList params;
@@ -337,6 +338,11 @@ public class XGBoostClassifier implements OpenCVStatModel {
             throw new RuntimeException(e);
         }
 
+    }
+
+    @Override
+    public PixelType getOutputType(boolean requestProbabilities) {
+        return PixelType.FLOAT32;
     }
 
     @Override
