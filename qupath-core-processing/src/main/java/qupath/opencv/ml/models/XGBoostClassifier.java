@@ -1,6 +1,7 @@
 package qupath.opencv.ml.models;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import ml.dmlc.xgboost4j.java.DMatrix;
 import ml.dmlc.xgboost4j.java.XGBoostError;
@@ -18,8 +19,195 @@ import qupath.opencv.tools.OpenCVTools;
 public class XGBoostClassifier implements OpenCVStatModel {
     private static final Logger logger = LoggerFactory.getLogger(XGBoostClassifier.class);
 
+    private final ParameterList params;
     private boolean isTrained = false;
     private Booster booster;
+
+    public XGBoostClassifier() {
+        this.params = createParameterList();
+    }
+
+    private ParameterList createParameterList() {
+        ParameterList pl = new ParameterList();
+        pl.addIntParameter("nthread",
+                "Number of threads to use for preprocessing XGBoost models.",
+                1);
+        pl.addChoiceParameter("booster",
+                "Which booster to use. gbtree and dart use tree based models while gblinear uses linear functions.",
+                "gbtree",
+                List.of("gbtree", "gblinear", "dart"));
+        pl.addChoiceParameter(
+                "device",
+                "Which device to use",
+                "cpu",
+                List.of("cpu", "gpu", "cuda")
+        );
+        pl.addChoiceParameter(
+                "verbosity",
+                "Verbosity level",
+                0,
+                List.of(0, 1, 2, 3)
+        );
+        pl.addDoubleParameter(
+                "learning_rate",
+                """
+                Learning rate: Step size shrinkage used in update to prevent overfitting.
+                """,
+                0.3
+        );
+        pl.addDoubleParameter(
+                "gamma",
+                """
+                Gamma: Minimum loss reduction required to make a further partition on a leaf node of the tree.
+                """,
+                0.3
+        );
+        pl.addIntParameter(
+                "max_depth",
+                """
+                        Maximum depth of a tree; higher values make the model more complex. 0 indicates no limit.
+                        """,
+                6
+        );
+        pl.addDoubleParameter(
+                "min_child_weight",
+                """
+                Minimum sum of instance weight (hessian) needed in a child. Larger values make the model more conservative.
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "max_delta_step",
+                """
+                Maximum delta step we allow each leaf output to be. 0 means no constraint,
+                positive values can help making the update step more conservative.
+                """,
+                0
+        );
+        pl.addDoubleParameter(
+                "subsample",
+                """
+                Subsample ratio of the training instances; can prevent overfitting
+                0.5 means that XGBoost would randomly sample half of the training data prior to growing trees.
+                """,
+                1
+        );
+        pl.addChoiceParameter(
+                "sampling_method",
+                """
+                The method to use to sample the training instances.
+                uniform: each training instance has an equal probability of being selected.
+                gradient_based: the selection probability for each training instance is proportional to the regularized absolute value of gradients
+                """,
+                "uniform",
+                List.of("uniform", "gradient_based")
+        );
+        pl.addDoubleParameter(
+                "colsample_bytree",
+                """
+                subsample ratio of columns when constructing each tree. Subsampling occurs once for every tree constructed.
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "colsample_bylevel",
+                """
+                subsample ratio of columns for each level. Subsampling occurs once for every new depth level reached in a tree.
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "colsample_bynode",
+                """
+                subsample ratio of columns for each node (split). Subsampling occurs once every time a new split is evaluated.
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "alpha",
+                """
+                L1 regularization term on weights.
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "lambda",
+                """
+                L2 regularization term on weights.
+                """,
+                1
+        );
+        pl.addChoiceParameter(
+                "tree_method",
+                """
+                The tree construction algorithm used in XGBoost.
+                auto: Same as the hist tree method.
+                exact: Exact greedy algorithm. Enumerates all split candidates.
+                approx: Approximate greedy algorithm using quantile sketch and gradient histogram.
+                hist: Faster histogram optimized approximate greedy algorithm.
+                """,
+                "auto",
+                List.of("auto", "exact", "approx", "hist")
+        );
+        pl.addDoubleParameter(
+                "scale_pos_weight",
+                """
+                Control the balance of positive and negative weights, useful for unbalanced classes.
+                A typical value to consider: sum(negative instances) / sum(positive instances)
+                """,
+                1
+        );
+        pl.addIntParameter(
+                "num_parallel_tree",
+                """
+                Number of parallel trees constructed during each iteration. This option is used to support boosted random forest.
+                """,
+                1
+        );
+        pl.addChoiceParameter(
+                "sample_type",
+                """
+                Type of sampling algorithm; only applicable for tree boosters.
+                uniform: dropped trees are selected uniformly.
+                weighted: dropped trees are selected in proportion to weight.
+                """,
+                "uniform",
+                List.of("uniform", "weighted")
+        );
+        pl.addChoiceParameter(
+                "normalize_type",
+                """
+                Type of normalization algorithm; only applicable for tree boosters.
+                tree: new trees have the same weight of each of dropped trees.
+                forest: new trees have the same weight of sum of dropped trees (forest).
+                """,
+                "tree",
+                List.of("tree", "forest")
+        );
+        pl.addDoubleParameter(
+                "rate_drop",
+                """
+                Dropout rate (a fraction of previous trees to drop during the dropout).
+                Range [0.0, 1.0]
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "skip_drop",
+                """
+                Probability of skipping the dropout procedure during a boosting iteration. Range [0.0, 1.0]
+                """,
+                1
+        );
+        pl.addDoubleParameter(
+                "skip_drop",
+                """
+                Probability of skipping the dropout procedure during a boosting iteration. Range [0.0, 1.0]
+                """,
+                1
+        );
+        return pl;
+    }
 
     @Override
     public String toString() {
@@ -58,7 +246,7 @@ public class XGBoostClassifier implements OpenCVStatModel {
 
     @Override
     public ParameterList getParameterList() {
-        return null;
+        return params;
     }
 
     @Override
@@ -93,15 +281,17 @@ public class XGBoostClassifier implements OpenCVStatModel {
                     put("train", finalDmat);
                 }
             };
-            Map<String, Object> params = new HashMap<>() {
+            Map<String, Object> xgParams = new HashMap<>() {
                 {
+                    putAll(params.getKeyValueParameters(true));
+                    put("validate_parameters", true);
+                    // todo set parameters from list
                     put("device", "cuda");
-                    put("nthread", 10);
                     put("objective", "multi:softmax");
                     put("num_class", trainData.getClassLabels().rows());
                 }
             };
-            booster = XGBoost.train(dmat, params, nround, watches, null, null);
+            booster = XGBoost.train(dmat, xgParams, nround, watches, null, null);
             isTrained = true;
         } catch (XGBoostError e) {
             throw new RuntimeException(e);
