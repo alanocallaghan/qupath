@@ -1,5 +1,16 @@
 package qupath.opencv.ml.models;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.google.gson.TypeAdapter;
+import com.google.gson.annotations.JsonAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +30,9 @@ import qupath.opencv.tools.OpenCVTools;
 public class XGBoostClassifier implements OpenCVStatModel {
     private static final Logger logger = LoggerFactory.getLogger(XGBoostClassifier.class);
 
-    private final ParameterList params;
+    private ParameterList params;
     private boolean isTrained = false;
+    @JsonAdapter(BoosterTypeAdapter.class)
     private Booster booster;
 
     public XGBoostClassifier() {
@@ -331,4 +343,40 @@ public class XGBoostClassifier implements OpenCVStatModel {
     public void close() throws Exception {
 
     }
+
+    public static class BoosterTypeAdapter extends TypeAdapter<Booster> {
+        @Override
+        public void write(JsonWriter out, Booster booster) throws IOException {
+            if (booster == null) {
+                out.nullValue();
+                return;
+            }
+            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+            try {
+                booster.saveModel(outStream);
+            } catch (XGBoostError e) {
+                throw new RuntimeException(e);
+            }
+            try (JsonReader reader = new JsonReader(new StringReader(outStream.toString(StandardCharsets.UTF_8)))) {
+                out.value(String.valueOf(JsonParser.parseReader(reader)));
+            }
+        }
+
+        @Override
+        public Booster read(JsonReader in) throws IOException {
+            if (in.peek() == JsonToken.NULL) {
+                in.nextNull();
+                return null;
+            }
+            JsonElement el = JsonParser.parseReader(in);
+            String jsonString = el.getAsString();
+            byte[] bytes = jsonString.getBytes(StandardCharsets.UTF_8);
+            try {
+                return XGBoost.loadModel(bytes);
+            } catch (XGBoostError e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
 }
