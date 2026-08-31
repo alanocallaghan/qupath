@@ -216,7 +216,7 @@ public class XGBoostClassifier implements OpenCVStatModel {
 
     @Override
     public boolean supportsMissingValues() {
-        return false;
+        return true;
     }
 
     @Override
@@ -236,11 +236,12 @@ public class XGBoostClassifier implements OpenCVStatModel {
 
     @Override
     public boolean supportsAutoUpdate() {
-        return false;
+        return true;
     }
 
     @Override
     public boolean supportsProbabilities() {
+        // todo can be true if using multi:softprob
         return false;
     }
 
