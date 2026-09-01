@@ -4,7 +4,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.TypeAdapter;
 import com.google.gson.annotations.JsonAdapter;
-import com.google.gson.internal.bind.ReflectiveTypeAdapterFactory;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
@@ -43,8 +42,12 @@ public class XGBoostClassifier implements TrainableModel {
 
     private ParameterList createParameterList() {
         ParameterList pl = new ParameterList();
+        pl.addIntParameter("nround",
+                "Number of boosting rounds",
+                1);
+
         pl.addIntParameter("nthread",
-                "Number of threads to use for preprocessing XGBoost models.",
+                "Number of threads to use for preprocessing XGBoost models",
                 1);
         pl.addChoiceParameter("booster",
                 "Which booster to use. gbtree and dart use tree based models while gblinear uses linear functions.",
@@ -279,33 +282,37 @@ public class XGBoostClassifier implements TrainableModel {
         Mat trainSamples = trainData.getTrainSamples();
 
         float[] data = OpenCVTools.extractFloats(trainSamples);
-        int nrow = trainSamples.rows();
-        int ncol = trainSamples.cols();
+        int rows = trainSamples.rows();
+        int cols = trainSamples.cols();
 
         Mat responses = trainData.getTrainResponses();
         float[] fResponses = OpenCVTools.extractFloats(responses);
+        float[] weights = OpenCVTools.extractFloats(trainData.getTrainSampleWeights());
 
-        DMatrix dmat = null;
+        DMatrix dMat;
         try {
-            dmat = new DMatrix(data, nrow, ncol);
-            dmat.setLabel(fResponses);
-            int nround = 10;
-            DMatrix finalDmat = dmat;
+            dMat = new DMatrix(data, rows, cols, Float.NaN);
+            dMat.setWeight(weights);
+            dMat.setLabel(fResponses);
+            DMatrix finalDMat = dMat;
             Map<String, DMatrix> watches = new HashMap<>() {
                 {
-                    put("train", finalDmat);
+                    put("train", finalDMat);
                 }
             };
+            var map = params.getKeyValueParameters(true);
+            int nround = (int) map.get("nround");
+            map.remove("nround");
             Map<String, Object> xgParams = new HashMap<>() {
                 {
-                    putAll(params.getKeyValueParameters(true));
+                    putAll(map);
                     put("validate_parameters", true);
                     put("device", "cuda");
                     put("objective", "multi:softmax");
                     put("num_class", trainData.getClassLabels().rows());
                 }
             };
-            booster = XGBoost.train(dmat, xgParams, nround, watches, null, null);
+            booster = XGBoost.train(dMat, xgParams, nround, watches, null, null);
             isTrained = true;
         } catch (XGBoostError e) {
             throw new RuntimeException(e);
@@ -317,13 +324,13 @@ public class XGBoostClassifier implements TrainableModel {
     public void predict(Mat samples, Mat results, Mat probabilities) {
 
         float[] data = OpenCVTools.extractFloats(samples);
-        int nrow = samples.rows();
-        int ncol = samples.cols();
+        int rows = samples.rows();
+        int cols = samples.cols();
 
         try {
-            DMatrix dmat = new DMatrix(data, nrow, ncol);
-            float[][] predicts = booster.predict(dmat);
-            results.create(nrow, 1, opencv_core.CV_32F);
+            DMatrix dMat = new DMatrix(data, rows, cols, Float.NaN);
+            float[][] predicts = booster.predict(dMat);
+            results.create(rows, 1, opencv_core.CV_32F);
             var indexer = results.createIndexer();
             for (int i = 0; i < predicts.length; i++) {
                 float min = Float.MIN_VALUE;
