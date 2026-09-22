@@ -236,7 +236,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
 
     Legend.LegendItem createLegendItem(Series<X,Y> series) {
         Legend.LegendItem legendItem = new Legend.LegendItem(series.getName());
-        legendItem.setSymbol(new Circle(3, getColor(series.getName())));
+        legendItem.setSymbol(new Circle(5, getColor(series.getName())));
         return legendItem;
     }
 
