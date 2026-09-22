@@ -11,6 +11,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.ScatterChart;
+import javafx.scene.chart.ValueAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.StackPane;
@@ -210,13 +211,15 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         if (chart instanceof CanvasScatterChart<Number, Number> canvasScatterChart) {
             canvasScatterChart.getCanvas().addEventHandler(MouseEvent.ANY, e -> {
                 if (e.getEventType() == MouseEvent.MOUSE_CLICKED) {
-                    var item = canvasScatterChart.findObject(e.getX(), e.getY(), 2);
+                    double pixelTolerance = markerSize * 1.5; // todo figure this out
+
+                    var item = canvasScatterChart.findObject(e.getX(), e.getY(), pixelTolerance);
                     item.ifPresent((data) -> {
                         tryToSelect(
                                 (PathObject) data.getExtraValue(),
                                 e.isShiftDown(),
-                                e.getClickCount() == 2);
-
+                                true);
+//                                e.getClickCount() == 2);
                     });
                 }
             });

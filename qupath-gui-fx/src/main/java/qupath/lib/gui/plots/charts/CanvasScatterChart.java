@@ -11,6 +11,7 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.ScatterChart;
+import javafx.scene.chart.ValueAxis;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -66,7 +67,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         return markerOpacity.get();
     }
 
-
     /**
      * Constructs a XYChart given the two axes. The initial content for the chart
      * plot background and plot area that includes vertical and horizontal grid
@@ -89,17 +89,61 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         markerSize.subscribe(this::redraw);
     }
 
+    /**
+     * Try to get the item nearest to a given coordinate on the canvas
+     * @param x the x coord in pixels on the canvas
+     * @param y the x coord in pixels on the canvas
+     * @param tolerance the tolerance in pixel units
+     * @return
+     */
+    public Optional<Data<X,Y>> findObject(double x, double y, double tolerance) {
+        // translate from canvas coords to data scale
+        double width = getXAxis().getWidth();
+        double height = getYAxis().getHeight();
+        @SuppressWarnings("rawtypes") var vax = (ValueAxis)getXAxis();
+        @SuppressWarnings("rawtypes") var vay = (ValueAxis)getYAxis();
+        double rx = Math.abs(vax.getUpperBound() - vax.getLowerBound());
+        double ry = Math.abs(vay.getUpperBound() - vay.getLowerBound());
+        double xPerPix = rx / width;
+        double yPerPix = ry / height;
+        double tolX = tolerance * xPerPix;
+        double tolY = tolerance * yPerPix;
+
+        logger.debug("Querying tree at X: {}, Y: {}; tol X: {}, tol Y: {}", x, y, tolX, tolY);
+        Envelope search = new Envelope(
+                (double)getXAxis().getValueForDisplay(x - tolX),
+                (double)getXAxis().getValueForDisplay(x + tolX),
+                (double)getYAxis().getValueForDisplay(y - tolY),
+                (double)getYAxis().getValueForDisplay(y + tolY)
+        );
+
+        List<Data<X,Y>> candidates = tree.query(search);
+        logger.debug("{} candidates found", candidates.size());
+
+        Data<X,Y> closestPoint = null;
+        double minDistance = Double.MAX_VALUE;
+        double maxDistance = 10;
+        // these are actually the xy mouse coords
+        Coordinate clickCoord = new Coordinate(x, y);
+        for (Data<X,Y> candidate : candidates) {
+            // candidate values are on data scale
+            double distance = new Coordinate(
+                    getXAxis().getDisplayPosition(candidate.getXValue()),
+                    getYAxis().getDisplayPosition(candidate.getYValue())
+            ).distance(clickCoord);
+            if (distance <= minDistance && distance < maxDistance) {
+                minDistance = distance;
+                closestPoint = candidate;
+            }
+        }
+        logger.debug("Minimum distance {}", minDistance);
+        return Optional.ofNullable(closestPoint);
+    }
+
+
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {
         tree.insert(createEnvelope(item), item);
-    }
-
-    private Envelope createEnvelope(Data<X, Y> item) {
-        Point p = gf.createPoint(new Coordinate(
-                (Double) item.getXValue(),
-                (Double) item.getYValue())
-        );
-        return p.getEnvelopeInternal();
     }
 
     @Override
@@ -124,6 +168,16 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
     @Override
     protected void seriesRemoved(Series<X, Y> series) {
         requestChartLayout();
+    }
+
+    private Envelope createEnvelope(Data<X, Y> item) {
+        // cannot create tree with XY coords because axes may not be initiated
+        // also keeping it on data scale means it does not need to be update
+        Point p = gf.createPoint(new Coordinate(
+                (Double) item.getXValue(),
+                (Double) item.getYValue())
+        );
+        return p.getEnvelopeInternal();
     }
 
     @Override
@@ -163,41 +217,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         }
     }
 
-    private Color getColor(String name) {
-        return colorMap.computeIfAbsent(name, _ -> getNextColor());
-    }
-
-    public Optional<Data<X,Y>> findObject(X x, Y y, double tolerance) {
-        logger.debug("Querying tree at {}, {}; tol {}", x, y, tolerance);
-        Envelope search = new Envelope(
-                (double)getXAxis().getValueForDisplay((double)x - tolerance),
-                (double)getXAxis().getValueForDisplay((double)x + tolerance),
-                (double)getYAxis().getValueForDisplay((double)y - tolerance),
-                (double)getYAxis().getValueForDisplay((double)y + tolerance)
-        );
-
-        List<Data<X,Y>> candidates = tree.query(search);
-        logger.debug("{} candidates found", candidates.size());
-
-        Data<X,Y> closestPoint = null;
-        double minDistance = Double.MAX_VALUE;
-        Coordinate clickCoord = new Coordinate(
-                (double)getXAxis().getValueForDisplay((Double) x),
-                (double)getYAxis().getValueForDisplay((Double) y)
-        );
-        for (Data<X,Y> candidate : candidates) {
-            double distance = new Coordinate(
-                    (Double) candidate.getXValue(),
-                    (Double) candidate.getYValue()).distance(clickCoord);
-            if (distance <= tolerance && distance < minDistance) {
-                minDistance = distance;
-                closestPoint = candidate;
-            }
-        }
-        logger.debug(closestPoint == null ? "No valid candidates found" : "A valid candidate found");
-        return Optional.ofNullable(closestPoint);
-    }
-
     @Override
     protected void updateLegend() {
         List<Legend.LegendItem> legendList = new ArrayList<>();
@@ -219,6 +238,10 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         Legend.LegendItem legendItem = new Legend.LegendItem(series.getName());
         legendItem.setSymbol(new Circle(3, getColor(series.getName())));
         return legendItem;
+    }
+
+    private Color getColor(String name) {
+        return colorMap.computeIfAbsent(name, _ -> getNextColor());
     }
 
     private Color getNextColor() {
