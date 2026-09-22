@@ -21,7 +21,7 @@
  * #L%
  */
 
-package qupath.lib.gui.charts;
+package qupath.lib.gui.plots;
 
 import javafx.beans.property.Property;
 import javafx.beans.property.SimpleDoubleProperty;
@@ -41,7 +41,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.analysis.stats.Histogram;
 import qupath.lib.common.GeneralTools;
-import qupath.lib.gui.charts.HistogramChart.HistogramData;
+import qupath.lib.gui.plots.charts.HistogramChart;
+import qupath.lib.gui.plots.charts.HistogramChart.HistogramData;
 import qupath.lib.gui.dialogs.ParameterPanelFX;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;

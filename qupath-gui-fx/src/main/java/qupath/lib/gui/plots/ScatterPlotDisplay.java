@@ -1,4 +1,4 @@
-package qupath.lib.gui.charts;
+package qupath.lib.gui.plots;
 
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
@@ -39,6 +39,7 @@ import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
+import qupath.lib.gui.plots.charts.PathObjectScatterChart;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.objects.PathObject;
 

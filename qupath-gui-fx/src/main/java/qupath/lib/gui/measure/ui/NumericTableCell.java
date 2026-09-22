@@ -5,7 +5,7 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseEvent;
 import qupath.lib.common.GeneralTools;
-import qupath.lib.gui.charts.HistogramDisplay;
+import qupath.lib.gui.plots.HistogramDisplay;
 
 class NumericTableCell<T> extends TableCell<T, Number> {
 

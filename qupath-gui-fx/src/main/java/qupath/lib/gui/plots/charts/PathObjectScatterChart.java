@@ -19,7 +19,7 @@
  * #L%
  */
 
-package qupath.lib.gui.charts;
+package qupath.lib.gui.plots.charts;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
@@ -47,6 +47,7 @@ import javafx.scene.shape.Circle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.GeneralTools;
+import qupath.lib.gui.plots.builders.Charts;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -667,7 +668,7 @@ public class PathObjectScatterChart extends ScatterChart<Number, Number> {
                         .orElse(null);
                 // Need to make sure that the viewer hasn't changed
                 if (pathObject != null && PathObjectTools.hierarchyContainsObject(hierarchy, pathObject)) {
-                    Charts.ScatterChartBuilder.tryToSelect(
+                    Charts.tryToSelectObject(
                             pathObject, viewer, viewer.getImageData(),
                             event.isShiftDown(), event.getClickCount() == 2);
                 }
