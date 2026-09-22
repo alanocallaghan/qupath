@@ -40,6 +40,10 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
 
+    /**
+     * The size of markers on this chart
+     * @return the property corresponding to marker size
+     */
     public DoubleProperty markerSizeProperty() {
         return markerSize;
     }
@@ -53,7 +57,10 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         return markerSize.get();
     }
 
-
+    /**
+     * The opacity of markers in this plot
+     * @return the property corresponding to marker opacity
+     */
     public DoubleProperty markerOpacityProperty() {
         return markerOpacity;
     }
@@ -68,17 +75,20 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
     }
 
     /**
-     * Constructs a XYChart given the two axes. The initial content for the chart
-     * plot background and plot area that includes vertical and horizontal grid
-     * lines and fills, are added.
-     *
-     * @param xAxis X Axis for this XY chart
-     * @param yAxis Y Axis for this XY chart
+     * Construct a CanvasScatterChart with the two axes and the defined color map.
+     * @param xAxis the x-axis for this chart
+     * @param yAxis the y-axis for this chart
      */
     public CanvasScatterChart(Axis<X> xAxis, Axis<Y> yAxis) {
         this(xAxis, yAxis, Map.of());
     }
 
+    /**
+     * Construct a CanvasScatterChart with the two axes and the defined color map.
+     * @param xAxis the x-axis for this chart
+     * @param yAxis the y-axis for this chart
+     * @param colorMap the mapping from series names to colors (can be empty)
+     */
     public CanvasScatterChart(Axis<X> xAxis, Axis<Y> yAxis, Map<String, Color> colorMap) {
         super(xAxis, yAxis);
         this.colorMap.putAll(colorMap);
