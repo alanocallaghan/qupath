@@ -24,7 +24,7 @@ import org.locationtech.jts.index.quadtree.Quadtree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
+public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements CanvasChart<X,Y> {
     private static final Logger logger = LoggerFactory.getLogger(CanvasScatterChart.class);
 
     // my best attempt at non-terrible non-clashing default colors. Could instead use something from ColorBrewer
@@ -102,14 +102,9 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         timer.start();
     }
 
-    /**
-     * Try to get the item nearest to a given coordinate on the canvas
-     * @param x the x coord in pixels on the canvas
-     * @param y the x coord in pixels on the canvas
-     * @param tolerance the tolerance in pixel units
-     * @return
-     */
-    public Optional<Data<X,Y>> findObject(double x, double y, double tolerance) {
+
+    @Override
+    public Optional<Data<X,Y>> findDataPoint(double x, double y, double tolerance) {
         // translate from canvas coords to data scale
         double width = getXAxis().getWidth();
         double height = getYAxis().getHeight();

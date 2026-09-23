@@ -2,15 +2,18 @@ package qupath.lib.gui.plots.builders;
 
 import java.awt.image.BufferedImage;
 import java.util.Collection;
+import java.util.Optional;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.chart.Axis;
+import javafx.scene.chart.XYChart;
 import javafx.scene.input.MouseEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.ColorTools;
 import qupath.lib.gui.plots.charts.BoxplotChart;
 import qupath.lib.gui.plots.charts.CanvasBoxplotChart;
+import qupath.lib.gui.plots.charts.CanvasChart;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.ProjectImageEntry;
@@ -20,7 +23,7 @@ public class BoxplotChartBuilder extends Charts.XYCategoryChartBuilder<BoxplotCh
     private boolean showAllPoints = false;
 
     private static final Logger logger = LoggerFactory.getLogger(BoxplotChartBuilder.class);
-    private boolean useCanvas;
+    private boolean useCanvas = true;
 
     @Override
     protected BoxplotChart<String, Number> createNewChart(Axis<String> xAxis, Axis<Number> yAxis) {
@@ -70,6 +73,7 @@ public class BoxplotChartBuilder extends Charts.XYCategoryChartBuilder<BoxplotCh
      */
     public <T extends PathObject> BoxplotChartBuilder measurementByClass(String name, Collection<? extends T> collection, String measurement) {
         pathObjects.addAll(collection);
+        logger.info("{} objects added", pathObjects.size());
         return addSeries(createSeries(name,
                 collection,
                 (T po) -> {
@@ -118,42 +122,59 @@ public class BoxplotChartBuilder extends Charts.XYCategoryChartBuilder<BoxplotCh
         super.updateChart(chart);
         chart.getData().setAll(getSeries());
         // todo refactor similar methods somehow
-        // If we have a hierarchy, and PathObjects, make the plot live
-        for (var s : getSeries()) {
-            for (var d : s.getData()) {
-                var extra = d.getExtraValue();
-                var dataNode = d.getNode();
-                if (extra instanceof PathObject pathObject && dataNode != null) {
-                    // todo should the boxplot set colors per series as scatters do, or leave series open to allow more complex boxplots...?
-                    Integer color = ColorToolsFX.getDisplayedColorARGB(pathObject);
-                    String style = String.format("-fx-background-color: rgb(%d,%d,%d,%.2f);",
-                            ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color), markerOpacity);
-                    dataNode.setStyle(style);
-                    dataNode.setPickOnBounds(true);
-                    dataNode.addEventHandler(MouseEvent.ANY, e -> {
-                        if (e.getEventType() == MouseEvent.MOUSE_CLICKED) {
-                            tryToSelect(pathObject, e.isShiftDown(), e.getClickCount() == 2);
-                        } else if (e.getEventType() == MouseEvent.MOUSE_ENTERED) {
-                            dataNode.setStyle(style + ";"
-                                    + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.5), 4, 0, 1, 1);");
-                        } else if (e.getEventType() == MouseEvent.MOUSE_EXITED) {
-                            dataNode.setStyle(style);
-                        }
-                    });
-                } else if (extra instanceof ProjectImageEntry<?> pie && dataNode != null) {
-                    int color = ColorTools.packRGB(127, 127, 127);
-                    String style = String.format("-fx-background-color: rgb(%d,%d,%d,%.2f);",
-                            ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color), markerOpacity);
-                    dataNode.setStyle(style);
-                    dataNode.addEventHandler(MouseEvent.ANY, e -> {
-                        if (e.getEventType() == MouseEvent.MOUSE_CLICKED)
-                            Charts.tryToOpen((ProjectImageEntry<BufferedImage>) pie);
-                        else if (e.getEventType() == MouseEvent.MOUSE_ENTERED)
-                            dataNode.setStyle(style + ";"
-                                    + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.5), 4, 0, 1, 1);");
-                        else if (e.getEventType() == MouseEvent.MOUSE_EXITED)
-                            dataNode.setStyle(style);
-                    });
+        if (chart instanceof CanvasChart) {
+            CanvasChart<String, Number> canvasChart = (CanvasChart<String, Number>) chart;
+            canvasChart.getCanvas().addEventHandler(MouseEvent.ANY, e -> {
+                if (e.getEventType() == MouseEvent.MOUSE_CLICKED) {
+                    double pixelTolerance = markerOpacity * 1.5;
+                    Optional<XYChart.Data<String,Number>> item = canvasChart.findDataPoint(e.getX(), e.getY(), pixelTolerance);
+                    item.ifPresent((data) ->
+                            tryToSelect(
+                                (PathObject) data.getExtraValue(),
+                                e.isShiftDown(),
+                                e.getClickCount() == 2));
+                }
+            });
+
+        } else {
+
+            // If we have a hierarchy, and PathObjects, make the plot live
+            for (var s : getSeries()) {
+                for (var d : s.getData()) {
+                    var extra = d.getExtraValue();
+                    var dataNode = d.getNode();
+                    if (extra instanceof PathObject pathObject && dataNode != null) {
+                        // todo should the boxplot set colors per series as scatters do, or leave series open to allow more complex boxplots...?
+                        Integer color = ColorToolsFX.getDisplayedColorARGB(pathObject);
+                        String style = String.format("-fx-background-color: rgb(%d,%d,%d,%.2f);",
+                                ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color), markerOpacity);
+                        dataNode.setStyle(style);
+                        dataNode.setPickOnBounds(true);
+                        dataNode.addEventHandler(MouseEvent.ANY, e -> {
+                            if (e.getEventType() == MouseEvent.MOUSE_CLICKED) {
+                                tryToSelect(pathObject, e.isShiftDown(), e.getClickCount() == 2);
+                            } else if (e.getEventType() == MouseEvent.MOUSE_ENTERED) {
+                                dataNode.setStyle(style + ";"
+                                        + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.5), 4, 0, 1, 1);");
+                            } else if (e.getEventType() == MouseEvent.MOUSE_EXITED) {
+                                dataNode.setStyle(style);
+                            }
+                        });
+                    } else if (extra instanceof ProjectImageEntry<?> pie && dataNode != null) {
+                        int color = ColorTools.packRGB(127, 127, 127);
+                        String style = String.format("-fx-background-color: rgb(%d,%d,%d,%.2f);",
+                                ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color), markerOpacity);
+                        dataNode.setStyle(style);
+                        dataNode.addEventHandler(MouseEvent.ANY, e -> {
+                            if (e.getEventType() == MouseEvent.MOUSE_CLICKED)
+                                Charts.tryToOpen((ProjectImageEntry<BufferedImage>) pie);
+                            else if (e.getEventType() == MouseEvent.MOUSE_ENTERED)
+                                dataNode.setStyle(style + ";"
+                                        + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.5), 4, 0, 1, 1);");
+                            else if (e.getEventType() == MouseEvent.MOUSE_EXITED)
+                                dataNode.setStyle(style);
+                        });
+                    }
                 }
             }
         }

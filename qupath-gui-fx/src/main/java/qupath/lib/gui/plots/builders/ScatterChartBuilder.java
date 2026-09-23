@@ -11,13 +11,13 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.ScatterChart;
-import javafx.scene.chart.ValueAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.StackPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.ColorTools;
+import qupath.lib.gui.plots.charts.CanvasChart;
 import qupath.lib.gui.plots.charts.CanvasScatterChart;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.tools.ColorToolsFX;
@@ -37,7 +37,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
     private Integer DEFAULT_MAX_DATAPOINTS = 10_000;
     private Integer maxDatapoints;
     private Random rnd = new Random();
-    private boolean useCanvas;
+    private boolean useCanvas = true;
 
     ScatterChartBuilder() {
     }
@@ -201,25 +201,27 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
                                 getClass().getClassLoader().getResource("css/charts/chart_base.css")).toExternalForm()
                 );
 
-        // If we have a hierarchy, and PathObjects, make the plot live
-        if (chart instanceof CanvasScatterChart<Number, Number> canvasScatterChart) {
-            canvasScatterChart.getCanvas().addEventHandler(MouseEvent.ANY, e -> {
+        // if it's a canvaschart, we have to let it do the majic of finding data points for us
+        if (chart instanceof CanvasChart) {
+            CanvasChart<Number, Number> canvasChart = (CanvasChart<Number, Number>) chart;
+            canvasChart.getCanvas().addEventHandler(MouseEvent.ANY, e -> {
                 if (e.getEventType() == MouseEvent.MOUSE_CLICKED) {
                     double pixelTolerance = markerSize * 1.5; // todo figure this out
 
-                    var item = canvasScatterChart.findObject(e.getX(), e.getY(), pixelTolerance);
-                    item.ifPresent((data) -> {
-                        tryToSelect(
+                    var item = canvasChart.findDataPoint(e.getX(), e.getY(), pixelTolerance);
+                    item.ifPresent((data) ->
+                            tryToSelect(
                                 (PathObject) data.getExtraValue(),
                                 e.isShiftDown(),
-                                true);
-//                                e.getClickCount() == 2);
-                    });
+                                e.getClickCount() == 2));
                 }
             });
         } else {
-            // div2 because setting radius not width/height
+            // otherwise if we have a hierarchy, and PathObjects, make the plot live
+
+            // set point style for legends to all be the same div2 because setting radius not width/height
             String baseStyle = String.format("-fx-background-radius: %fpx; -fx-padding: %fpx;", this.markerSize/2, this.markerSize/2);
+            // counter for the default CHART_COLOR stuff below
             int n = 1;
             for (var s : getSeries()) {
                 // if series names are available use them to set the default colors for the legend
@@ -251,11 +253,11 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
                                     node.setStyle(baseStyle);
                             });
                         }
-                    } else if (extra instanceof ProjectImageEntry pie && node != null) {
+                    } else //noinspection rawtypes
+                        if (extra instanceof ProjectImageEntry pie && node != null) {
                         node.setStyle(baseStyle);
                         node.addEventHandler(MouseEvent.ANY, e -> {
                             if (e.getEventType() == MouseEvent.MOUSE_CLICKED)
-                                //noinspection unchecked
                                 Charts.tryToOpen((ProjectImageEntry<BufferedImage>) pie);
                             else if (e.getEventType() == MouseEvent.MOUSE_ENTERED)
                                 node.setStyle(baseStyle + ";"

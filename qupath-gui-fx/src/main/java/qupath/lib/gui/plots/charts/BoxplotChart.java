@@ -2,6 +2,7 @@ package qupath.lib.gui.plots.charts;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,16 +32,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BoxplotChart<X, Y> extends XYChart<X, Y> {
-    protected final boolean drawAllPoints;
+    private static final Logger logger = LoggerFactory.getLogger(BoxplotChart.class);
     protected final Orientation orientation;
     private final Random random = new Random(42);
-    private static final Logger logger = LoggerFactory.getLogger(BoxplotChart.class);
     protected final CategoryAxis categoryAxis;
     protected final ValueAxis valueAxis;
     protected Function<Data<X, Y>, String> getCategory;
     protected Function<Data<X, Y>, Number> getNumeric;
+    protected final boolean drawAllPoints; // todo property?
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
+    private final Map<Data<X,Y>, Double> jitterValues = new HashMap<>();
+
+    protected double getJitterValue(Data<X,Y> data) {
+        return jitterValues.computeIfAbsent(data, (_) -> jitter());
+    }
 
     /**
      * The size of markers on this chart
@@ -182,6 +188,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     @Override
     protected void layoutPlotChildren() {
+        random.setSeed(42); // todo probably parameterise this
         Map<String, List<Data<X, Y>>> valuesByCategory = collectValuesByCategory();
         resetPlotChildren();
         for (var entry: valuesByCategory.entrySet()) {
@@ -230,7 +237,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
             }
         }
 
-        var j = jitter();
+        var j = getJitterValue(data);
         double x = orientation == Orientation.VERTICAL ?  valPos: catPos + j;
         double y = orientation == Orientation.VERTICAL ? catPos + j: valPos;
         // nudge points based on point size (i.e., don't centre them on the topleft of the point).
@@ -290,7 +297,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     }
 
     // todo control jitter width + seed
-    protected double jitter() {
+    private double jitter() {
         double spacing = categoryAxis.getCategorySpacing() / 6;
         return random.nextDouble(-spacing, spacing);
     }
