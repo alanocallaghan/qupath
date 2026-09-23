@@ -110,6 +110,8 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         // translate from canvas coords to data scale
         double width = getXAxis().getWidth();
         double height = getYAxis().getHeight();
+        // we know they're valueAxes as there's only value or category for now...
+        // but this assumption may not hold in future
         @SuppressWarnings("rawtypes") var vax = (ValueAxis)getXAxis();
         @SuppressWarnings("rawtypes") var vay = (ValueAxis)getYAxis();
         double rx = Math.abs(vax.getUpperBound() - vax.getLowerBound());
@@ -132,7 +134,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
 
         Data<X,Y> closestPoint = null;
         double minDistance = Double.MAX_VALUE;
-        double maxDistance = 10;
+        double maxDistance = markerSize.get() / 2;
         // these are actually the xy mouse coords
         Coordinate clickCoord = new Coordinate(x, y);
         for (Data<X,Y> candidate : candidates) {
@@ -219,9 +221,10 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
             for (Data<X, Y> elem: series.getData()) {
                 context.setFill(color);
                 double size = getMarkerSize();
+                // fillOval uses bounding box coords
                 context.fillOval(
-                        getXAxis().getDisplayPosition(elem.getXValue()),
-                        getYAxis().getDisplayPosition(elem.getYValue()),
+                        getXAxis().getDisplayPosition(elem.getXValue()) - (size / 2),
+                        getYAxis().getDisplayPosition(elem.getYValue()) - (size / 2),
                         size, size);
             }
         }
