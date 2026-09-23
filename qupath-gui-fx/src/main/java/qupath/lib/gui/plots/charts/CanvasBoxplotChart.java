@@ -29,9 +29,6 @@ public class CanvasBoxplotChart<X,Y> extends BoxplotChart<X,Y> implements Canvas
 
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {
-        // todo update boxes for this series
-        // todo spatial cache?
-        // todo animations?
         requestChartLayout();
     }
 
@@ -52,7 +49,7 @@ public class CanvasBoxplotChart<X,Y> extends BoxplotChart<X,Y> implements Canvas
 
         double value = getNumeric.apply(data).doubleValue();
         double valPos = valueAxis.getDisplayPosition(value);
-        if (!drawAllPoints) {
+        if (!getDrawAllPoints()) {
             if ((value > boxParams.lowWhisk()) && (value < boxParams.upWhisk())) {
                 return;
             }

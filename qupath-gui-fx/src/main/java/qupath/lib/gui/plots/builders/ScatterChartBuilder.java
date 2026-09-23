@@ -206,8 +206,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
             CanvasChart<Number, Number> canvasChart = (CanvasChart<Number, Number>) chart;
             canvasChart.getCanvas().addEventHandler(MouseEvent.ANY, e -> {
                 if (e.getEventType() == MouseEvent.MOUSE_CLICKED) {
-                    double pixelTolerance = markerSize * 1.5; // todo figure this out
-
+                    double pixelTolerance = markerSize * 1.5;
                     var item = canvasChart.findDataPoint(e.getX(), e.getY(), pixelTolerance);
                     item.ifPresent((data) ->
                             tryToSelect(

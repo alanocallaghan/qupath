@@ -10,7 +10,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -36,10 +38,10 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     protected final Orientation orientation;
     private final Random random = new Random(42);
     protected final CategoryAxis categoryAxis;
-    protected final ValueAxis valueAxis;
+    protected final ValueAxis<Number> valueAxis;
     protected Function<Data<X, Y>, String> getCategory;
     protected Function<Data<X, Y>, Number> getNumeric;
-    protected final boolean drawAllPoints; // todo property?
+    protected final BooleanProperty drawAllPoints = new SimpleBooleanProperty(false); // todo property?
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
     private final Map<Data<X,Y>, Double> jitterValues = new HashMap<>();
@@ -63,6 +65,22 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     public double getMarkerSize() {
         return markerSize.get();
+    }
+
+    /**
+     * Whether to draw all points, or only outliers
+     * @return the corresponding boolean property
+     */
+    public BooleanProperty drawAllPointsProperty() {
+        return drawAllPoints;
+    }
+
+    public void setDrawAllPoints(boolean value) {
+        this.drawAllPoints.set(value);
+    }
+
+    public boolean getDrawAllPoints() {
+        return drawAllPoints.get();
     }
 
     /**
@@ -105,19 +123,19 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
      */
     public BoxplotChart(Axis<X> xAxis, Axis<Y> yAxis, boolean drawAllPoints) {
         super(xAxis, yAxis);
-        this.drawAllPoints = drawAllPoints;
+        setDrawAllPoints(drawAllPoints);
         if (!((xAxis instanceof CategoryAxis && yAxis instanceof ValueAxis) || (yAxis instanceof CategoryAxis && xAxis instanceof ValueAxis))) {
             throw new IllegalArgumentException("Illegal axis types: must supply one Category and one Value axis");
         }
         if (xAxis instanceof CategoryAxis) {
             categoryAxis = (CategoryAxis) xAxis;
-            valueAxis = (ValueAxis) yAxis;
+            valueAxis = (ValueAxis<Number>) yAxis;
             orientation = Orientation.HORIZONTAL;
             getCategory = d -> (String) d.getXValue();
             getNumeric = d -> (Number)d.getYValue();
         } else {
             categoryAxis = (CategoryAxis) yAxis;
-            valueAxis = (ValueAxis) xAxis;
+            valueAxis = (ValueAxis<Number>) xAxis;
             orientation = Orientation.VERTICAL;
             getNumeric = d -> (Number)d.getXValue();
             getCategory = d -> (String) d.getYValue();
@@ -130,14 +148,12 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {
-        // todo update boxes for this series
         if (item.getNode() == null) {
             Node node = createPoint(item);
             item.setNode(node);
             getPlotChildren().add(item.getNode());
             node.getStyleClass().setAll("chart-symbol", "series" + getData().indexOf(series), "data" + itemIndex);
         }
-        // todo animations?
         requestChartLayout();
     }
 
@@ -151,15 +167,12 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     @Override
     protected void dataItemRemoved(Data<X, Y> item, Series<X, Y> series) {
-        // todo update boxes for this series
-        // todo animations
         removeDataItemFromDisplay(series, item);
         requestChartLayout();
     }
 
     @Override
     protected void dataItemChanged(Data<X, Y> item) {
-        // todo animations; update boxes
         item.setNode(createPoint(item));
         getPlotChildren().add(item.getNode());
         requestChartLayout();
@@ -176,7 +189,6 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     @Override
     protected void seriesChanged(ListChangeListener.Change<? extends Series> c) {
-        // todo update boxes
         requestChartLayout();
     }
 
@@ -230,7 +242,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         double valPos = valueAxis.getDisplayPosition(value);
         var node = data.getNode();
 
-        if (!drawAllPoints) {
+        if (!getDrawAllPoints()) {
             if ((value > boxParams.lowWhisk) && (value < boxParams.upWhisk)) {
                 node.setVisible(false);
                 return;
@@ -318,13 +330,13 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         }
     }
 
-    private Rectangle makeRect(double catPos, double lowPos, double highPos, double width) {
+    private Rectangle makeRect(double catPos, double lowPos, double highPos, double boxSize) {
         if (orientation == Orientation.VERTICAL) {
-            return new Rectangle(lowPos, catPos - (width/2), Math.abs(highPos  - lowPos), width);
+            return new Rectangle(lowPos, catPos - (boxSize / 2), Math.abs(highPos  - lowPos), boxSize);
         } else {
             double minY = Math.min(lowPos, highPos);
             double height = Math.abs(lowPos - highPos);
-            return new Rectangle(catPos - (width/2), minY, width, height);
+            return new Rectangle(catPos - (boxSize / 2), minY, boxSize, height);
         }
     }
 
