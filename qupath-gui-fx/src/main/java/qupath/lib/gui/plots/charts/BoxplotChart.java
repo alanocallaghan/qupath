@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Orientation;
@@ -24,18 +26,55 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class BoxPlotChart<X, Y> extends XYChart<X, Y> {
-    private final boolean drawAllPoints;
-    private final CategoryAxis categoryAxis;
-    private final ValueAxis valueAxis;
-    private final Orientation orientation;
+public class BoxplotChart<X, Y> extends XYChart<X, Y> {
+    protected final boolean drawAllPoints;
+    protected final Orientation orientation;
     private final Random random = new Random(42);
-    private static final Logger logger = LoggerFactory.getLogger(BoxPlotChart.class);
-    private Function<Data<X, Y>, String> getCategory;
-    private Function<Data<X, Y>, Number> getNumeric;
+    private static final Logger logger = LoggerFactory.getLogger(BoxplotChart.class);
+    protected final CategoryAxis categoryAxis;
+    protected final ValueAxis valueAxis;
+    protected Function<Data<X, Y>, String> getCategory;
+    protected Function<Data<X, Y>, Number> getNumeric;
+    private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
+    private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
+
+    /**
+     * The size of markers on this chart
+     * @return the property corresponding to marker size
+     */
+    public DoubleProperty markerSizeProperty() {
+        return markerSize;
+    }
+
+    public void setMarkerSize(double value) {
+        if (value <= 0 || !Double.isFinite(value)) return;
+        this.markerSize.set(value);
+    }
+
+    public double getMarkerSize() {
+        return markerSize.get();
+    }
+
+    /**
+     * The opacity of markers in this plot
+     * @return the property corresponding to marker opacity
+     */
+    public DoubleProperty markerOpacityProperty() {
+        return markerOpacity;
+    }
+
+    public void setMarkerOpacity(double value) {
+        if (value <= 0 || value > 1 || !Double.isFinite(value)) return;
+        this.markerOpacity.set(value);
+    }
+
+    public double getMarkerOpacity() {
+        return markerOpacity.get();
+    }
 
     /**
      * Constructs a XYChart given the two axes. The initial content for the chart
@@ -45,7 +84,7 @@ public class BoxPlotChart<X, Y> extends XYChart<X, Y> {
      * @param xAxis X Axis for this XY chart
      * @param yAxis Y Axis for this XY chart
      */
-    public BoxPlotChart(Axis<X> xAxis, Axis<Y> yAxis) {
+    public BoxplotChart(Axis<X> xAxis, Axis<Y> yAxis) {
         this(xAxis, yAxis, true);
     }
 
@@ -58,7 +97,7 @@ public class BoxPlotChart<X, Y> extends XYChart<X, Y> {
      * @param yAxis Y Axis for this XY chart
      * @param drawAllPoints whether to draw all points, or only the outliers (outside 1.5*IQR)
      */
-    public BoxPlotChart(Axis<X> xAxis, Axis<Y> yAxis, boolean drawAllPoints) {
+    public BoxplotChart(Axis<X> xAxis, Axis<Y> yAxis, boolean drawAllPoints) {
         super(xAxis, yAxis);
         this.drawAllPoints = drawAllPoints;
         if (!((xAxis instanceof CategoryAxis && yAxis instanceof ValueAxis) || (yAxis instanceof CategoryAxis && xAxis instanceof ValueAxis))) {
@@ -140,8 +179,96 @@ public class BoxPlotChart<X, Y> extends XYChart<X, Y> {
         requestChartLayout();
     }
 
+
     @Override
     protected void layoutPlotChildren() {
+        Map<String, List<Data<X, Y>>> valuesByCategory = collectValuesByCategory();
+        resetPlotChildren();
+        for (var entry: valuesByCategory.entrySet()) {
+            String category = entry.getKey();
+            List<Data<X,Y>> datas = entry.getValue();
+            var boxParams = calculateBoxParams(datas);
+
+            // todo if multiple series, need to dodge the boxes and adjust width
+            double catPos = categoryAxis.getDisplayPosition(category);
+            drawBox(boxParams, catPos);
+            for (var data: datas) {
+                drawPoint(data, catPos, boxParams);
+            }
+        }
+    }
+
+    protected void resetPlotChildren() {
+        getPlotChildren().clear();
+    }
+
+    protected void drawBox(BoxParams boxParams, double catPos) {
+        Group box = makeBox(
+                catPos,
+                valueAxis.getDisplayPosition(boxParams.lowWhisk),
+                valueAxis.getDisplayPosition(boxParams.lowQuartile),
+                valueAxis.getDisplayPosition(boxParams.median),
+                valueAxis.getDisplayPosition(boxParams.upQuartile),
+                valueAxis.getDisplayPosition(boxParams.upWhisk),
+                categoryAxis.getCategorySpacing() * 0.75
+        );
+        getPlotChildren().add(box);
+    }
+
+    protected void drawPoint(Data<X, Y> data, double catPos, BoxParams boxParams) {
+        Group containerGroup = new Group();
+        getPlotChildren().add(containerGroup);
+
+        double value = getNumeric.apply(data).doubleValue();
+        double valPos = valueAxis.getDisplayPosition(value);
+        var node = data.getNode();
+
+        if (!drawAllPoints) {
+            if ((value > boxParams.lowWhisk) && (value < boxParams.upWhisk)) {
+                node.setVisible(false);
+                return;
+            }
+        }
+
+        var j = jitter();
+        double x = orientation == Orientation.VERTICAL ?  valPos: catPos + j;
+        double y = orientation == Orientation.VERTICAL ? catPos + j: valPos;
+        // nudge points based on point size (i.e., don't centre them on the topleft of the point).
+        double halfWidth = node.getBoundsInLocal().getWidth() / 2;
+        double halfHeight = node.getBoundsInLocal().getHeight() / 2;
+        node.setLayoutX(x - halfWidth);
+        node.setLayoutY(y - halfHeight);
+        containerGroup.getChildren().add(node);
+    }
+
+    protected record BoxParams(double lowWhisk, double lowQuartile, double median, double upQuartile, double upWhisk) {}
+
+    protected BoxParams calculateBoxParams(List<Data<X, Y>> datas) {
+        // sort for the sake of binary search; percentile could cope with unsorted
+        double[] doubles = datas.stream().map(getNumeric)
+                .mapToDouble(Number::doubleValue)
+                .sorted()
+                .toArray();
+
+        Percentile percentile = new Percentile();
+        percentile.setData(doubles);
+
+        // basic quantities
+        double lq = percentile.evaluate(25);
+        double median = percentile.evaluate(50);
+        double uq = percentile.evaluate(75);
+        double iqr = uq - lq;
+        // traditional boxplot whiskers are 1.5 * IQR
+        double lf = lq - (1.5 * iqr);
+        double uf = uq + (1.5 * iqr);
+        double lowWhisk = searchForWhisker(doubles, lf);
+        double upWhisk = searchForWhisker(doubles, uf);
+
+        return new BoxParams(lowWhisk, lq, median, uq, upWhisk);
+    }
+
+    // todo this should in future handle series, I think
+    protected @NonNull Map<String, List<Data<X, Y>>> collectValuesByCategory() {
         Map<String, List<Data<X,Y>>> valuesByCategory = new LinkedHashMap<>();
         for (var series : getData()) {
             for (var data : series.getData()) {
@@ -150,66 +277,7 @@ public class BoxPlotChart<X, Y> extends XYChart<X, Y> {
                         .add(data);
             }
         }
-        getPlotChildren().clear();
-        for (var entry: valuesByCategory.entrySet()) {
-            String category = entry.getKey();
-            List<Data<X,Y>> datas = entry.getValue();
-            List<Number> values = datas.stream().map(getNumeric).toList();
-            double[] doubles = values.stream().mapToDouble(Number::doubleValue).toArray();
-
-            // sort for the sake of binary search; percentile could cope with unsorted
-            Arrays.sort(doubles);
-            Percentile percentile = new Percentile();
-            percentile.setData(doubles);
-
-            // basic quantities
-            double lq = percentile.evaluate(25);
-            double median = percentile.evaluate(50);
-            double uq = percentile.evaluate(75);
-            double iqr = uq - lq;
-            // traditional boxplot whiskers are 1.5 * IQR
-            double lf = lq - (1.5 * iqr);
-            double uf = uq + (1.5 * iqr);
-            double lowWhisk = searchForWhisker(doubles, lf);
-            double upWhisk = searchForWhisker(doubles, uf);
-
-            // todo if multiple series, need to dodge the boxes and adjust width
-            double catPos = categoryAxis.getDisplayPosition(category);
-            Group box = makeBox(
-                    catPos,
-                    valueAxis.getDisplayPosition(lowWhisk),
-                    valueAxis.getDisplayPosition(lq),
-                    valueAxis.getDisplayPosition(median),
-                    valueAxis.getDisplayPosition(uq),
-                    valueAxis.getDisplayPosition(upWhisk),
-                    categoryAxis.getCategorySpacing() * 0.75
-            );
-
-            getPlotChildren().add(box);
-            Group containerGroup = new Group();
-            getPlotChildren().add(containerGroup);
-
-            for (var data: datas) {
-                double value = getNumeric.apply(data).doubleValue();
-                double valPos = valueAxis.getDisplayPosition(value);
-                var j = jitter();
-                double x = orientation == Orientation.VERTICAL ?  valPos: catPos + j;
-                double y = orientation == Orientation.VERTICAL ? catPos + j: valPos;
-                var node = data.getNode();
-                // nudge points based on point size (i.e., don't centre them on the topleft of the point).
-                double halfWidth = node.getBoundsInLocal().getWidth() / 2;
-                double halfHeight = node.getBoundsInLocal().getHeight() / 2;
-                node.setLayoutX(x - halfWidth);
-                node.setLayoutY(y - halfHeight);
-                if (!drawAllPoints) {
-                    if ((value > lowWhisk) && (value < upWhisk)) {
-                        node.setVisible(false);
-                    }
-                }
-                containerGroup.getChildren().add(node);
-            }
-
-        }
+        return valuesByCategory;
     }
 
     private static double searchForWhisker(double[] doubles, double lf) {
@@ -222,7 +290,7 @@ public class BoxPlotChart<X, Y> extends XYChart<X, Y> {
     }
 
     // todo control jitter width + seed
-    private double jitter() {
+    protected double jitter() {
         double spacing = categoryAxis.getCategorySpacing() / 6;
         return random.nextDouble(-spacing, spacing);
     }

@@ -38,7 +38,6 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
     private Integer maxDatapoints;
     private Random rnd = new Random();
     private boolean useCanvas;
-    private double markerSize = 2;
 
     ScatterChartBuilder() {
     }
@@ -90,11 +89,6 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
 
     public ScatterChartBuilder useCanvas(boolean value) {
         this.useCanvas = value;
-        return this;
-    }
-
-    public ScatterChartBuilder markerSize(double value) {
-        this.markerSize = value;
         return this;
     }
 

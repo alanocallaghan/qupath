@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javafx.animation.AnimationTimer;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.scene.canvas.Canvas;
@@ -39,6 +40,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
     private final Canvas canvas = new Canvas();
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
+    private boolean redrawNeeded;
 
     /**
      * The size of markers on this chart
@@ -97,6 +99,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
         // unsure if this is idiomatic
         markerOpacity.subscribe(this::redraw);
         markerSize.subscribe(this::redraw);
+        timer.start();
     }
 
     /**
@@ -204,9 +207,9 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
             canvas.widthProperty().bind(plotContent.widthProperty());
             canvas.heightProperty().bind(plotContent.heightProperty());
             canvas.widthProperty().addListener((v, o, n) ->
-                    redraw());
+                    redrawNeeded = true);
             canvas.heightProperty().addListener((v, o, n) ->
-                    redraw());
+                    redrawNeeded = true);
         }
 
         redraw();
@@ -264,4 +267,22 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> {
     public Canvas getCanvas() {
         return canvas;
     }
+
+
+    private final AnimationTimer timer = new AnimationTimer() {
+
+        @Override
+        public void handle(long now) {
+            handlePulse();
+        }
+
+    };
+
+    private void handlePulse() {
+        if (redrawNeeded) {
+            redraw();
+        }
+        redrawNeeded = false;
+    }
+
 }

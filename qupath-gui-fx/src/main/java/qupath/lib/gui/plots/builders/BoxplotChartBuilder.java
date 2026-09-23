@@ -9,31 +9,57 @@ import javafx.scene.input.MouseEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.ColorTools;
-import qupath.lib.gui.plots.charts.BoxPlotChart;
+import qupath.lib.gui.plots.charts.BoxplotChart;
+import qupath.lib.gui.plots.charts.CanvasBoxplotChart;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.ProjectImageEntry;
 
-public class BoxPlotBuilder extends Charts.XYCategoryChartBuilder<BoxPlotBuilder, BoxPlotChart<String, Number>> {
+public class BoxplotChartBuilder extends Charts.XYCategoryChartBuilder<BoxplotChartBuilder, BoxplotChart<String, Number>> {
     private final ObservableList<PathObject> pathObjects = FXCollections.observableArrayList();
     private boolean showAllPoints = false;
 
-    private static final Logger logger = LoggerFactory.getLogger(BoxPlotBuilder.class);
+    private static final Logger logger = LoggerFactory.getLogger(BoxplotChartBuilder.class);
+    private boolean useCanvas;
 
     @Override
-    protected BoxPlotChart<String, Number> createNewChart(Axis<String> xAxis, Axis<Number> yAxis) {
-        return new BoxPlotChart<>(xAxis, yAxis, showAllPoints);
+    protected BoxplotChart<String, Number> createNewChart(Axis<String> xAxis, Axis<Number> yAxis) {
+        BoxplotChart<String, Number> chart;
+        if (useCanvas) {
+            chart = new CanvasBoxplotChart<>(xAxis, yAxis, showAllPoints);
+        } else {
+            chart = new BoxplotChart<>(xAxis, yAxis, showAllPoints);
+        }
+        chart.setMarkerOpacity(markerOpacity);
+        chart.setMarkerSize(markerSize);
+        return chart;
     }
 
     @Override
-    protected BoxPlotBuilder getThis() {
+    protected BoxplotChartBuilder getThis() {
         return this;
     }
 
-    public BoxPlotBuilder showAllPoints(boolean value) {
+    /**
+     * Control whether to show all points on the boxplot, or just outliers
+     * @param value the new boolean value
+     * @return this builder
+     */
+    public BoxplotChartBuilder showAllPoints(boolean value) {
         this.showAllPoints = value;
         return getThis();
     }
+
+    /**
+     * Control whether to use canvas-based rendering for the boxplot
+     * @param value the new boolean value
+     * @return this builder
+     */
+    public BoxplotChartBuilder useCanvas(boolean value) {
+        this.useCanvas = value;
+        return getThis();
+    }
+
     /**
      * Make a boxplot of a measurement split by class
      * @param name the name of the plot
@@ -42,7 +68,7 @@ public class BoxPlotBuilder extends Charts.XYCategoryChartBuilder<BoxPlotBuilder
      * @return this builder
      * @param <T> the type of {@link PathObject}
      */
-    public <T extends PathObject> BoxPlotBuilder measurementByClass(String name, Collection<? extends T> collection, String measurement) {
+    public <T extends PathObject> BoxplotChartBuilder measurementByClass(String name, Collection<? extends T> collection, String measurement) {
         pathObjects.addAll(collection);
         return addSeries(createSeries(name,
                 collection,
@@ -61,7 +87,7 @@ public class BoxPlotBuilder extends Charts.XYCategoryChartBuilder<BoxPlotBuilder
      * @param xMeasurement the metadata values to plot on the x-axis
      * @param yMeasurement the metadata values to plot on the y-axis
      */
-    public BoxPlotBuilder metadata(Collection<? extends ProjectImageEntry<BufferedImage>> projectImageEntries, String xMeasurement, String yMeasurement) {
+    public BoxplotChartBuilder metadata(Collection<? extends ProjectImageEntry<BufferedImage>> projectImageEntries, String xMeasurement, String yMeasurement) {
         xLabel(xMeasurement);
         yLabel(yMeasurement);
         // todo neater way to deal with missing values
@@ -88,7 +114,7 @@ public class BoxPlotBuilder extends Charts.XYCategoryChartBuilder<BoxPlotBuilder
     }
 
     @Override
-    protected void updateChart(BoxPlotChart<String, Number> chart) {
+    protected void updateChart(BoxplotChart<String, Number> chart) {
         super.updateChart(chart);
         chart.getData().setAll(getSeries());
         // todo refactor similar methods somehow

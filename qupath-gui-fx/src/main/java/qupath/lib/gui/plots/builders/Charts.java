@@ -138,7 +138,8 @@ public class Charts {
 		protected Side legendSide;
 		
 		protected double markerOpacity = 1.0;
-		
+		protected double markerSize = 1.0;
+
 		protected double width = -1;
 		protected double height = -1;
 		
@@ -193,7 +194,15 @@ public class Charts {
 			}
 		}
 
-
+		/**
+		 * Set the size of the marker (typically points or lines) on the chart
+		 * @param value the marker size
+		 * @return this builder
+		 */
+		public T markerSize(double value) {
+			this.markerSize = value;
+			return getThis();
+		}
 
 		/**
 		 * Specify the side of the chart where the legend should be shown.
@@ -712,8 +721,8 @@ public class Charts {
 		return new ScatterChartBuilder();
 	}
 
-	public static BoxPlotBuilder boxPlot() {
-		return new BoxPlotBuilder();
+	public static BoxplotChartBuilder boxPlot() {
+		return new BoxplotChartBuilder();
 	}
 
 	/**
