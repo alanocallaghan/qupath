@@ -216,12 +216,13 @@ public class SummaryMeasurementTable {
 
         findViewer();
         initOverlayVisibilityBinding();
+        initTabPane();
+
         initTable();
 
         synchronizer = new ViewerTableSynchronizer(viewer, hierarchy, table);
 
         initSplitPane();
-        initTabPane();
 
         model.getItems().addListener(this::handleObjectsChanged);
 
@@ -376,8 +377,8 @@ public class SummaryMeasurementTable {
         var tooltipText = model.getHelpText(name);
         TableColumn<PathObject, Number> col = new TableColumn<>(name);
         col.setCellValueFactory(cellData -> createNumericMeasurement(model, cellData.getValue(), cellData.getTableColumn().getText()));
-//        col.setCellFactory(column -> new NumericTableCell<>(getTooltip(tooltipText), (HistogramDisplay) histogramDisplay));
-        // todo
+        var histogramDisplay = plotDisplays.stream().filter(p -> p instanceof HistogramDisplay).findFirst();
+        col.setCellFactory(column -> new NumericTableCell<>(getTooltip(tooltipText), (HistogramDisplay) histogramDisplay.orElse(null)));
         return col;
     }
 
