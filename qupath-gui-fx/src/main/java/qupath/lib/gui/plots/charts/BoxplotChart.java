@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
+import javafx.beans.InvalidationListener;
+import javafx.beans.Observable;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -43,9 +45,12 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     protected final ValueAxis<Number> valueAxis;
     protected Function<Data<X, Y>, String> getCategory;
     protected Function<Data<X, Y>, Number> getNumeric;
+
     protected final BooleanProperty drawAllPoints = new SimpleBooleanProperty(false); // todo property?
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
+
+    // to enable us to lookup points...
     private final Map<Data<X,Y>, Double> jitterValues = new HashMap<>();
 
     protected double getJitterValue(Data<X,Y> data) {
@@ -146,7 +151,11 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         if (getData() == null) {
             setData(FXCollections.observableArrayList());
         }
+        markerSize.addListener(_ -> layoutPlotChildren());
+        markerOpacity.addListener(_ -> layoutPlotChildren());
+        this.drawAllPoints.addListener(_ -> layoutPlotChildren());
     }
+
 
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {

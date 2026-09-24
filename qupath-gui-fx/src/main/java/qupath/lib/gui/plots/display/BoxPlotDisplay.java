@@ -6,6 +6,7 @@ import java.util.function.Function;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.Property;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -29,8 +30,11 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import org.controlsfx.control.SearchableComboBox;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.fx.utils.FXUtils;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.localization.QuPathResources;
@@ -45,18 +49,26 @@ import qupath.lib.objects.classes.PathClass;
 // todo create abstractplotdisplay class?
 public class BoxPlotDisplay implements PlotDisplay {
 
+    private static final Logger logger = LoggerFactory.getLogger(BoxPlotDisplay.class);
+
     private final BoxplotChart<String, Number> boxplot;
     private final SearchableComboBox<String> comboNameY = new SearchableComboBox<>();
     private final DoubleProperty pointRadius = new SimpleDoubleProperty(2);
     private final DoubleProperty pointOpacity = new SimpleDoubleProperty(1);
     private final BooleanProperty showAxes = new SimpleBooleanProperty(true);
     private final BooleanProperty showGrid = new SimpleBooleanProperty(true);
+    private final BooleanProperty showAllPoints = new SimpleBooleanProperty(false);
 
     // todo showAllPoints as option
 
     private final BorderPane pane = new BorderPane();
-    private ObjectProperty<PathTableData<?>> model = new SimpleObjectProperty<>();
+    private final ObjectProperty<PathTableData<?>> model = new SimpleObjectProperty<>();
     private boolean isUpdating = false;
+
+    public BoxPlotDisplay(PathTableData<?> model) {
+        this();
+        this.model.set(model);
+    }
 
     /**
      * Create a scatter plot from a table of PathObject measurements.
@@ -65,13 +77,12 @@ public class BoxPlotDisplay implements PlotDisplay {
         this.model.addListener(this::handleModelChange);
         BorderPane panelMain = new BorderPane();
 
-        boxplot = (BoxplotChart<String, Number>) Charts.boxPlot()
+        boxplot = Charts.boxPlot()
                 .useCanvas(true)
                 .viewer(QuPathGUI.getInstance().getViewer())
                 .build();
         boxplot.setMarkerSize(pointRadius.get() * 2); // todo radius vs size
         boxplot.setMarkerOpacity(pointOpacity.get());
-
 
         var popup = new ContextMenu();
         var miCopy = new MenuItem(QuPathResources.getString("Charts.ScatterPlotDisplay.copyToClipboard"));
@@ -118,10 +129,8 @@ public class BoxPlotDisplay implements PlotDisplay {
         requestRefresh();
     }
 
-    private Pane createMainOptionsPane() {
-        return new VBox(
-                createDisplayOptionsPane()
-        );
+    private Region createMainOptionsPane() {
+        return createDisplayOptionsPane();
     }
 
     private void updateForModel(PathTableData<?> newValue) {
@@ -150,7 +159,7 @@ public class BoxPlotDisplay implements PlotDisplay {
     }
 
 
-    private TitledPane createDisplayOptionsPane() {
+    private Region createDisplayOptionsPane() {
         Spinner<Double> spinPointOpacity = new Spinner<>(
                 0.05, 1.0, pointOpacity.get(), 0.05);
         spinPointOpacity.getValueFactory().valueProperty().bindBidirectional(pointOpacity.asObject());
@@ -164,6 +173,12 @@ public class BoxPlotDisplay implements PlotDisplay {
         spinPointRadius.setEditable(true);
         spinPointRadius.setMinWidth(80);
         FXUtils.resetSpinnerNullToPrevious(spinPointRadius);
+
+        CheckBox cbShowAll = new CheckBox(QuPathResources.getString("Charts.BoxPlotDisplay.showAllPoints"));
+        cbShowAll.setTooltip(new Tooltip(QuPathResources.getString("Charts.BoxPlotDisplay.showAllPointsDescription")));
+        cbShowAll.selectedProperty().bindBidirectional(showAllPoints);
+        cbShowAll.setMinWidth(CheckBox.USE_PREF_SIZE);
+
 
         CheckBox cbDrawGrid = new CheckBox(QuPathResources.getString("Charts.ScatterPlotDisplay.showGrid"));
         cbDrawGrid.setTooltip(new Tooltip(QuPathResources.getString("Charts.ScatterPlotDisplay.showGridDescription")));
@@ -204,7 +219,8 @@ public class BoxPlotDisplay implements PlotDisplay {
 
         var boxCheckboxes = new VBox(
                 cbDrawGrid,
-                cbDrawAxes
+                cbDrawAxes,
+                cbShowAll
         );
         boxCheckboxes.setAlignment(Pos.CENTER_LEFT);
         boxCheckboxes.setSpacing(5);
@@ -222,7 +238,7 @@ public class BoxPlotDisplay implements PlotDisplay {
     /**
      * Set the data to display in the plot from a table model.
      * <p>
-     * This calls {@link setData(Collection, Function)} in addition to setting the x and y labels.
+     * This calls {@link setData(BoxplotChart, Collection, Function)} in addition to setting the x and y labels.
      *
      * @param pathObjects the objects to display
      * @param model the table model containing the measurements
@@ -283,6 +299,7 @@ public class BoxPlotDisplay implements PlotDisplay {
         boxplot.getXAxis().tickLabelsVisibleProperty().bindBidirectional(showAxes);
         boxplot.getYAxis().tickLabelsVisibleProperty().bindBidirectional(showAxes);
 
+        boxplot.drawAllPointsProperty().bindBidirectional(showAllPoints);
     }
 
     private static Label createLabelFor(Node node, String text, String tooltip) {
@@ -330,7 +347,14 @@ public class BoxPlotDisplay implements PlotDisplay {
     }
 
     @Override
-    public void showPlot(String... columns) {
-
+    public void plotColumns(String... columns) {
+        if (columns.length != 1) {
+            logger.debug("Only one column is valid for boxplot, supplied {}", columns.length);
+            return;
+        }
+        if (comboNameY.getItems().contains(columns[0])) {
+            comboNameY.getSelectionModel().select(columns[0]);
+        }
+        requestRefresh();
     }
 }

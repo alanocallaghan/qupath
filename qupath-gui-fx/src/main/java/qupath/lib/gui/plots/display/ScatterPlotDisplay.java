@@ -119,6 +119,11 @@ public class ScatterPlotDisplay implements PlotDisplay {
     // Record of number of points that have been set
     private final IntegerProperty totalPoints = new SimpleIntegerProperty();
 
+    public ScatterPlotDisplay(PathTableData<?> model) {
+        this();
+        this.model.set(model);
+    }
+
     /**
      * Create a scatter plot from a table of PathObject measurements.
      */
@@ -203,9 +208,10 @@ public class ScatterPlotDisplay implements PlotDisplay {
     }
 
     @Override
-    public void showPlot(String... columns) {
+    public void plotColumns(String... columns) {
         if (columns.length != 2) {
             logger.debug("Only two columns supported for scatter plot, supplied {}", columns.length);
+            return;
         }
         if (comboNameX.getItems().contains(columns[0]) && comboNameY.getItems().contains(columns[1])) {
             comboNameX.getSelectionModel().select(columns[0]);

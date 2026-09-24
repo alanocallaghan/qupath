@@ -377,8 +377,7 @@ public class SummaryMeasurementTable {
         var tooltipText = model.getHelpText(name);
         TableColumn<PathObject, Number> col = new TableColumn<>(name);
         col.setCellValueFactory(cellData -> createNumericMeasurement(model, cellData.getValue(), cellData.getTableColumn().getText()));
-        var histogramDisplay = plotDisplays.stream().filter(p -> p instanceof HistogramDisplay).findFirst();
-        col.setCellFactory(column -> new NumericTableCell<>(getTooltip(tooltipText), (HistogramDisplay) histogramDisplay.orElse(null)));
+        col.setCellFactory(column -> new NumericTableCell<>(getTooltip(tooltipText), plotDisplays));
         return col;
     }
 
@@ -471,8 +470,8 @@ public class SummaryMeasurementTable {
 
     private void initTabPane() {
         plotDisplays.add(new HistogramDisplay(model, true));
-        plotDisplays.add(new ScatterPlotDisplay());
-        plotDisplays.add(new BoxPlotDisplay());
+        plotDisplays.add(new ScatterPlotDisplay(model));
+        plotDisplays.add(new BoxPlotDisplay(model));
 
         for (PlotDisplay display : plotDisplays) {
             Tab tab = new Tab(display.getName(), display.getPane());
@@ -483,9 +482,9 @@ public class SummaryMeasurementTable {
         plotTabs.getSelectionModel().selectFirst();
 
         // We want to set the scatterpane only if it is shown
-        plotTabs.getSelectionModel().selectedIndexProperty().addListener((v, o, n) -> {
-                plotDisplays.get(n.intValue()).setModel(model);
-        });
+//        plotTabs.getSelectionModel().selectedIndexProperty().addListener((v, o, n) -> {
+//                plotDisplays.get(n.intValue()).setModel(model);
+//        });
     }
 
     private Action actionShowPlots;

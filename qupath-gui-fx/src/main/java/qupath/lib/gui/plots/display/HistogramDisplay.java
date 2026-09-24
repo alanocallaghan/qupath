@@ -335,7 +335,7 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 	}
 
 	@Override
-	public void showPlot(final String... columns) {
+	public void plotColumns(final String... columns) {
 		if (columns.length != 1) {
 			logger.debug("Only one column support for histogram, supplied {}", columns.length);
 			return;
