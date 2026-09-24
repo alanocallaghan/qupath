@@ -2,16 +2,19 @@ package qupath.lib.gui.plots.display;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.function.Function;
+import javafx.beans.InvalidationListener;
+import javafx.beans.Observable;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.Property;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
@@ -32,6 +35,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import org.controlsfx.control.CheckComboBox;
 import org.controlsfx.control.SearchableComboBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,11 +57,13 @@ public class BoxPlotDisplay implements PlotDisplay {
 
     private final BoxplotChart<String, Number> boxplot;
     private final SearchableComboBox<String> comboNameY = new SearchableComboBox<>();
+    private final CheckComboBox<PathClass> comboPathClasses = new CheckComboBox<>();
     private final DoubleProperty pointRadius = new SimpleDoubleProperty(2);
     private final DoubleProperty pointOpacity = new SimpleDoubleProperty(1);
     private final BooleanProperty showAxes = new SimpleBooleanProperty(true);
     private final BooleanProperty showGrid = new SimpleBooleanProperty(true);
     private final BooleanProperty showAllPoints = new SimpleBooleanProperty(false);
+    private final BooleanProperty baseClassOnly = new SimpleBooleanProperty(true);
 
     // todo showAllPoints as option
 
@@ -95,9 +101,8 @@ public class BoxPlotDisplay implements PlotDisplay {
 
         initProperties();
 
-        comboNameY.getSelectionModel().selectedItemProperty().addListener((v, o, n) ->
-                requestRefresh()
-        );
+        comboNameY.getSelectionModel().selectedItemProperty().addListener(_ -> requestRefresh());
+        comboPathClasses.getCheckModel().getCheckedItems().addListener((ListChangeListener<PathClass>) c -> requestRefresh());
 
         var topPane = new GridPane();
         var labelY = new Label(QuPathResources.getString("Charts.ScatterPlotDisplay.y"));
@@ -106,9 +111,16 @@ public class BoxPlotDisplay implements PlotDisplay {
         topPane.addRow(1, labelY, comboNameY);
         topPane.setHgap(5);
 
+        comboPathClasses.setTooltip(new Tooltip("Path classes to include"));
+        var labelPC = new Label("Path classes");
+        labelPC.setLabelFor(comboPathClasses);
+        topPane.addRow(2, labelPC, comboPathClasses);
+
+
         pane.setTop(topPane);
         comboNameY.prefWidthProperty().bind(pane.widthProperty());
-        comboNameY.prefWidthProperty().bind(pane.widthProperty());
+        comboPathClasses.prefWidthProperty().bind(pane.widthProperty());
+
         panelMain.setMinSize(200, 200);
         panelMain.setPrefSize(400, 300);
 
@@ -134,6 +146,8 @@ public class BoxPlotDisplay implements PlotDisplay {
     }
 
     private void updateForModel(PathTableData<?> newValue) {
+        // todo derived classes or classifications
+        updatePathClasses(newValue);
         comboNameY.getItems().setAll(newValue.getMeasurementNames());
 
         // Try to select the first column that isn't for 'centroids'...
@@ -158,6 +172,19 @@ public class BoxPlotDisplay implements PlotDisplay {
         }
     }
 
+    private void updatePathClasses(PathTableData<?> newValue) {
+        var objects = (Collection<PathObject>)newValue.getItems();
+        Function<PathObject, PathClass> collector = PathObject::getPathClass;
+        if (baseClassOnly.get()) {
+            collector = (po) -> po.getPathClass().getBaseClass();
+        }
+        comboPathClasses.getItems().setAll(
+                objects.stream().map(collector).distinct().toList()
+        );
+        comboPathClasses.getItems().add(PathClass.NULL_CLASS);
+        comboPathClasses.getCheckModel().checkAll();
+    }
+
 
     private Region createDisplayOptionsPane() {
         Spinner<Double> spinPointOpacity = new Spinner<>(
@@ -179,6 +206,11 @@ public class BoxPlotDisplay implements PlotDisplay {
         cbShowAll.selectedProperty().bindBidirectional(showAllPoints);
         cbShowAll.setMinWidth(CheckBox.USE_PREF_SIZE);
 
+        CheckBox cbBaseClassOnly = new CheckBox(QuPathResources.getString("Charts.BoxPlotDisplay.baseOnly"));
+        cbBaseClassOnly.setTooltip(new Tooltip(QuPathResources.getString("Charts.BoxPlotDisplay.baseOnlyDescription")));
+        cbBaseClassOnly.selectedProperty().bindBidirectional(baseClassOnly);
+        cbBaseClassOnly.setMinWidth(CheckBox.USE_PREF_SIZE);
+        cbBaseClassOnly.selectedProperty().addListener(_ -> updatePathClasses(model.get()));
 
         CheckBox cbDrawGrid = new CheckBox(QuPathResources.getString("Charts.ScatterPlotDisplay.showGrid"));
         cbDrawGrid.setTooltip(new Tooltip(QuPathResources.getString("Charts.ScatterPlotDisplay.showGridDescription")));
@@ -220,7 +252,8 @@ public class BoxPlotDisplay implements PlotDisplay {
         var boxCheckboxes = new VBox(
                 cbDrawGrid,
                 cbDrawAxes,
-                cbShowAll
+                cbShowAll,
+                cbBaseClassOnly
         );
         boxCheckboxes.setAlignment(Pos.CENTER_LEFT);
         boxCheckboxes.setSpacing(5);
@@ -238,7 +271,7 @@ public class BoxPlotDisplay implements PlotDisplay {
     /**
      * Set the data to display in the plot from a table model.
      * <p>
-     * This calls {@link setData(BoxplotChart, Collection, Function)} in addition to setting the x and y labels.
+     * This calls {@link setData(BoxplotChart, Collection, Function, Function)} in addition to setting the x and y labels.
      *
      * @param pathObjects the objects to display
      * @param model the table model containing the measurements
@@ -248,13 +281,14 @@ public class BoxPlotDisplay implements PlotDisplay {
             BoxplotChart<String, Number> boxplot,
             Collection<?> pathObjects,
             PathTableData<?> model,
+            Function<PathClass, Boolean> classFilter,
             String yMeasurement) {
 
         // todo don't love these casts just for abstraction
         var pathModel = (PathTableData<PathObject>)model;
         var pathCollection = (Collection<PathObject>)pathObjects;
 
-        setData(boxplot, pathCollection, p -> pathModel.getNumericValue(p, yMeasurement));
+        setData(boxplot, pathCollection, classFilter, p -> pathModel.getNumericValue(p, yMeasurement));
         boxplot.getYAxis().setLabel(yMeasurement);
     }
 
@@ -263,14 +297,18 @@ public class BoxPlotDisplay implements PlotDisplay {
      * @param pathObjects the objects to display
      * @param yFun a function to extract the y value to plot
      */
-    public static void setData(BoxplotChart<String,Number> boxplotChart,
-                              Collection<? extends PathObject> pathObjects,
-                              Function<PathObject, Number> yFun) {
+    public static void setData(
+            BoxplotChart<String,Number> boxplotChart,
+            Collection<? extends PathObject> pathObjects,
+            Function<PathClass, Boolean> classFilter,
+            Function<PathObject, Number> yFun) {
 
-        // Find the represented classes & sort them
+        // todo if the filter is null or something, then plot everything in one series (unlabelled)
+        // find the represented classes & sort them
         var newData = pathObjects
                 .stream()
                 .map(PathObject::getPathClass)
+                .filter(classFilter::apply)
                 .distinct()
                 .sorted(Comparator.nullsFirst(PathClass::compareTo))
                 .map(pc -> {
@@ -337,7 +375,10 @@ public class BoxPlotDisplay implements PlotDisplay {
         var y = comboNameY.getValue();
         if (y != null) {
             var items = model.getItems();
-            setDataFromTable(boxplot, items, model, y);
+            var classes = new HashSet<>(comboPathClasses.getCheckModel().getCheckedItems());
+            // only apply filter if one or more classes (including null class) are actually selected
+            Function<PathClass,Boolean> filter = classes.isEmpty() ?  _ -> true: classes::contains;
+            setDataFromTable(boxplot, items, model, filter, y);
         }
     }
 
