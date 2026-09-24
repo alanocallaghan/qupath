@@ -260,7 +260,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     }
 
     private void redraw() {
-        // todo shuffle so that one class isn't drawn on the other
         var context = canvas.getGraphicsContext2D();
         context.setGlobalAlpha(markerOpacity.get());
         context.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());

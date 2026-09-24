@@ -115,7 +115,6 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 			);
 	private final TableView<Property<Number>> table = new TableView<>();
 
-	// todo constructor without tabledata/model
 	/**
 	 * Constructor.
 	 * @param model the table data for histogramming

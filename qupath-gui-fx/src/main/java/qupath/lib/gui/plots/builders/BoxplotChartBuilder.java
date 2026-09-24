@@ -14,7 +14,6 @@ import qupath.lib.common.ColorTools;
 import qupath.lib.gui.plots.charts.BoxplotChart;
 import qupath.lib.gui.plots.charts.CanvasBoxplotChart;
 import qupath.lib.gui.plots.charts.CanvasChart;
-import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -144,10 +143,7 @@ public class BoxplotChartBuilder extends Charts.XYCategoryChartBuilder<BoxplotCh
                     var extra = d.getExtraValue();
                     var dataNode = d.getNode();
                     if (extra instanceof PathObject pathObject && dataNode != null) {
-                        // todo should the boxplot set colors per series as scatters do, or leave series open to allow more complex boxplots...?
-                        Integer color = ColorToolsFX.getDisplayedColorARGB(pathObject);
-                        String style = String.format("-fx-background-color: rgb(%d,%d,%d,%.2f);",
-                                ColorTools.red(color), ColorTools.green(color), ColorTools.blue(color), markerOpacity);
+                        String style = "";
                         dataNode.setStyle(style);
                         dataNode.setPickOnBounds(true);
                         dataNode.addEventHandler(MouseEvent.ANY, e -> {

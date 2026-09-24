@@ -218,6 +218,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         } else {
             // otherwise if we have a hierarchy, and PathObjects, make the plot live
 
+            // todo should not need to do this style wrangling here. thinly subclass scatter to handle this and handle in canvas version
             // set point style for legends to all be the same div2 because setting radius not width/height
             String baseStyle = String.format("-fx-background-radius: %fpx; -fx-padding: %fpx;", this.markerSize/2, this.markerSize/2);
             // counter for the default CHART_COLOR stuff below

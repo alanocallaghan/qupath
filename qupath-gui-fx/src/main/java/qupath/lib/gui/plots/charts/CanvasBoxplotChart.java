@@ -54,7 +54,6 @@ public class CanvasBoxplotChart<X,Y> extends BoxplotChart<X,Y> implements Canvas
 
     @Override
     protected void drawPoint(Data<X, Y> data, double catPos, BoxParams boxParams) {
-
         double value = getNumeric.apply(data).doubleValue();
         double valPos = valueAxis.getDisplayPosition(value);
         if (!getDrawAllPoints()) {

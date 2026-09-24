@@ -1,9 +1,11 @@
 package qupath.lib.gui.plots.display;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
 import javafx.beans.property.BooleanProperty;
@@ -178,10 +180,12 @@ public class BoxPlotDisplay implements PlotDisplay {
         if (baseClassOnly.get()) {
             collector = (po) -> po.getPathClass().getBaseClass();
         }
-        comboPathClasses.getItems().setAll(
-                objects.stream().map(collector).distinct().toList()
-        );
-        comboPathClasses.getItems().add(PathClass.NULL_CLASS);
+        var classes = new ArrayList<>(objects.stream().map(collector).sorted().distinct().toList());
+        if (classes.contains(null)) {
+            classes.remove(null);
+            classes.add(PathClass.NULL_CLASS);
+        }
+        comboPathClasses.getItems().setAll(classes);
         comboPathClasses.getCheckModel().checkAll();
     }
 

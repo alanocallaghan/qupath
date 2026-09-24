@@ -2,7 +2,6 @@ package qupath.lib.gui.plots.charts;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -11,12 +10,12 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
-import javafx.beans.InvalidationListener;
-import javafx.beans.Observable;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Orientation;
@@ -35,7 +34,6 @@ import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.objects.PathObject;
 
 public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     private static final Logger logger = LoggerFactory.getLogger(BoxplotChart.class);
@@ -46,9 +44,10 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     protected Function<Data<X, Y>, String> getCategory;
     protected Function<Data<X, Y>, Number> getNumeric;
 
-    protected final BooleanProperty drawAllPoints = new SimpleBooleanProperty(false); // todo property?
+    protected final BooleanProperty drawAllPoints = new SimpleBooleanProperty(false);
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
+    private final IntegerProperty randomSeed = new SimpleIntegerProperty(0);
 
     // to enable us to lookup points...
     private final Map<Data<X,Y>, Double> jitterValues = new HashMap<>();
@@ -72,6 +71,23 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     public double getMarkerSize() {
         return markerSize.get();
+    }
+
+
+    /**
+     * The random seed used to jitter points
+     * @return the property corresponding to random seed
+     */
+    public IntegerProperty randomSeedProperty() {
+        return randomSeed;
+    }
+
+    public void setRandomSeed(int value) {
+        this.markerSize.set(value);
+    }
+
+    public int getRandomSeed() {
+        return randomSeed.get();
     }
 
     /**
@@ -151,9 +167,13 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         if (getData() == null) {
             setData(FXCollections.observableArrayList());
         }
-        markerSize.addListener(_ -> layoutPlotChildren());
+        markerSize.addListener((_) -> layoutPlotChildren());
         markerOpacity.addListener(_ -> layoutPlotChildren());
         this.drawAllPoints.addListener(_ -> layoutPlotChildren());
+        this.randomSeed.addListener(_ -> {
+            jitterValues.clear();
+            layoutPlotChildren();
+        });
     }
 
 
@@ -211,7 +231,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     @Override
     protected void layoutPlotChildren() {
-        random.setSeed(42); // todo probably parameterise this
+        random.setSeed(randomSeed.get()); // todo probably parameterise this
         Map<String, List<Data<X, Y>>> valuesByCategory = collectValuesByCategory();
         resetPlotChildren();
         for (var entry: valuesByCategory.entrySet()) {
@@ -220,6 +240,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
             var boxParams = calculateBoxParams(datas);
 
             // todo if multiple series, need to dodge the boxes and adjust width
+            // see bargap and categorygap in barchart
             double catPos = categoryAxis.getDisplayPosition(category);
             drawBox(boxParams, catPos);
             for (var data: datas) {
