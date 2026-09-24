@@ -72,8 +72,10 @@ import qupath.fx.dialogs.FileChoosers;
 import qupath.fx.utils.FXUtils;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.ActionTools;
-import qupath.lib.gui.plots.HistogramDisplay;
-import qupath.lib.gui.plots.ScatterPlotDisplay;
+import qupath.lib.gui.plots.display.BoxPlotDisplay;
+import qupath.lib.gui.plots.display.HistogramDisplay;
+import qupath.lib.gui.plots.display.PlotDisplay;
+import qupath.lib.gui.plots.display.ScatterPlotDisplay;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.ObservableMeasurementTableData;
 import qupath.lib.gui.measure.PathTableData;
@@ -167,8 +169,7 @@ public class SummaryMeasurementTable {
     private final SplitPane splitPane = new SplitPane();
 
     private final TabPane plotTabs = new TabPane();
-    private HistogramDisplay histogramDisplay;
-    private ScatterPlotDisplay scatterPlotDisplay;
+    private List<PlotDisplay> plotDisplays = new ArrayList<>();
 
     private final Predicate<PathObject> primaryFilter;
 
@@ -265,8 +266,9 @@ public class SummaryMeasurementTable {
     }
 
     private void handleObjectsChanged(ListChangeListener.Change<? extends PathObject> c) {
-        histogramDisplay.refreshHistogram();
-        scatterPlotDisplay.refreshScatterPlot();
+        for (PlotDisplay display : plotDisplays) {
+            display.requestRefresh();
+        }
     }
 
     /**
@@ -374,7 +376,8 @@ public class SummaryMeasurementTable {
         var tooltipText = model.getHelpText(name);
         TableColumn<PathObject, Number> col = new TableColumn<>(name);
         col.setCellValueFactory(cellData -> createNumericMeasurement(model, cellData.getValue(), cellData.getTableColumn().getText()));
-        col.setCellFactory(column -> new NumericTableCell<>(getTooltip(tooltipText), histogramDisplay));
+//        col.setCellFactory(column -> new NumericTableCell<>(getTooltip(tooltipText), (HistogramDisplay) histogramDisplay));
+        // todo
         return col;
     }
 
@@ -466,27 +469,22 @@ public class SummaryMeasurementTable {
 
 
     private void initTabPane() {
-        histogramDisplay = new HistogramDisplay(model, true);
-        scatterPlotDisplay = new ScatterPlotDisplay();
+        plotDisplays.add(new HistogramDisplay(model, true));
+        plotDisplays.add(new ScatterPlotDisplay());
+        plotDisplays.add(new BoxPlotDisplay());
 
-        Tab tabHistogram = new Tab(QuPathResources.getString("Measure.MeasurementTable.histogram"), histogramDisplay.getPane());
-        tabHistogram.setClosable(false);
-        plotTabs.getTabs().add(tabHistogram);
-
-        Tab tabScatter = new Tab(QuPathResources.getString("Measure.MeasurementTable.scatterPlot"), scatterPlotDisplay.getPane());
-        tabScatter.setClosable(false);
-        plotTabs.getTabs().add(tabScatter);
-
+        for (PlotDisplay display : plotDisplays) {
+            Tab tab = new Tab(display.getName(), display.getPane());
+            tab.setClosable(false);
+            plotTabs.getTabs().add(tab);
+            FXUtils.makeTabUndockable(tab);
+        }
         plotTabs.getSelectionModel().selectFirst();
 
         // We want to set the scatterpane only if it is shown
-        tabScatter.selectedProperty().addListener((v, o, n) -> {
-            if (n)
-                scatterPlotDisplay.setModel(model);
+        plotTabs.getSelectionModel().selectedIndexProperty().addListener((v, o, n) -> {
+                plotDisplays.get(n.intValue()).setModel(model);
         });
-
-        FXUtils.makeTabUndockable(tabHistogram);
-        FXUtils.makeTabUndockable(tabScatter);
     }
 
     private Action actionShowPlots;
@@ -793,8 +791,9 @@ public class SummaryMeasurementTable {
             updateObjects();
         } else {
             table.refresh();
-            histogramDisplay.refreshHistogram();
-            scatterPlotDisplay.refreshScatterPlot();
+            for (var plot: plotDisplays) {
+                plot.requestRefresh();
+            }
         }
     }
 

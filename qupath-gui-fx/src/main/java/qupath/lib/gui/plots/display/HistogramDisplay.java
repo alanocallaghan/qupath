@@ -21,7 +21,7 @@
  * #L%
  */
 
-package qupath.lib.gui.plots;
+package qupath.lib.gui.plots.display;
 
 import javafx.beans.property.Property;
 import javafx.beans.property.SimpleDoubleProperty;
@@ -46,6 +46,7 @@ import qupath.lib.gui.plots.charts.HistogramChart.HistogramData;
 import qupath.lib.gui.dialogs.ParameterPanelFX;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
+import qupath.lib.objects.PathObject;
 import qupath.lib.plugins.parameters.IntParameter;
 import qupath.lib.plugins.parameters.ParameterChangeListener;
 import qupath.lib.plugins.parameters.ParameterList;
@@ -62,7 +63,7 @@ import java.util.List;
  * @author Pete Bankhead
  *
  */
-public class HistogramDisplay implements ParameterChangeListener {
+public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 
 	private static final Logger logger = LoggerFactory.getLogger(HistogramDisplay.class);
 
@@ -114,6 +115,7 @@ public class HistogramDisplay implements ParameterChangeListener {
 			);
 	private final TableView<Property<Number>> table = new TableView<>();
 
+	// todo constructor without tabledata/model
 	/**
 	 * Constructor.
 	 * @param model the table data for histogramming
@@ -242,6 +244,11 @@ public class HistogramDisplay implements ParameterChangeListener {
 		return paramsHistogram.getIntParameterValue("nBins");
 	}
 
+	@Override
+	public String getName() {
+		return QuPathResources.getString("Measure.MeasurementTable.histogram");
+	}
+
 	/**
 	 * Get the pane containing the histogram and associated UI components, for addition to a scene.
 	 * @return The pane
@@ -250,7 +257,13 @@ public class HistogramDisplay implements ParameterChangeListener {
 		return pane;
 	}
 
+	@Override
+	public void setModel(PathTableData<?> model) {
+		this.model = model;
+	}
+
 	void setHistogram(final PathTableData<?> model, final String columnName) {
+		setModel(model);
 		if (model != null && model.getMeasurementNames().contains(columnName)) {
 			double[] values = model.getDoubleValues(columnName);
 			int nBins = paramsHistogram.getIntParameterValue("nBins");
@@ -292,7 +305,6 @@ public class HistogramDisplay implements ParameterChangeListener {
 			currentColumn = columnName;
 			currentBins = nBins;
 			currentValues = values;
-			this.model = model;
 		} else {
 			histogramChart.getHistogramData().clear();
 			currentValues = null;
@@ -318,22 +330,23 @@ public class HistogramDisplay implements ParameterChangeListener {
 	/**
 	 * Refresh the currently-displayed histogram (e.g. because underlying data has changed).
 	 */
-	public void refreshHistogram() {
+	public void requestRefresh() {
 		setHistogram(model, currentColumn);
 	}
 
-
-	/**
-	 * Show the histogram for a specified data column.
-	 * @param column the name of the column to show
-	 */
-	public void showHistogram(final String column) {
-		if (comboName.getItems().contains(column))
-			comboName.getSelectionModel().select(column);
-		else
-			logger.debug("Unknown column requested: {}", column);
+	@Override
+	public void showPlot(final String... columns) {
+		if (columns.length != 1) {
+			logger.debug("Only one column support for histogram, supplied {}", columns.length);
+			return;
+		}
+		if (comboName.getItems().contains(columns[0])) {
+			comboName.getSelectionModel().select(columns[0]);
+		}
+		else {
+			logger.debug("Unknown column requested: {}", columns[0]);
+		}
 	}
-
 
 
 	@Override

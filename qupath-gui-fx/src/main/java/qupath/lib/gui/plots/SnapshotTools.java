@@ -18,7 +18,7 @@ import java.util.Objects;
  * Currently a package-private class while determining if it is useful enough to appear
  * elsewhere.
  */
-class SnapshotTools {
+public class SnapshotTools {
 
     /**
      * Make a snapshot of a JavaFX scene.

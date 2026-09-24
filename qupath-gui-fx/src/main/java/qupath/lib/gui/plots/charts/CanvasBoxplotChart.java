@@ -6,11 +6,13 @@ import java.util.Optional;
 import javafx.animation.AnimationTimer;
 import javafx.geometry.Orientation;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.chart.Axis;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
+import javafx.stage.Window;
 import org.locationtech.jts.geom.Coordinate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,12 +21,18 @@ public class CanvasBoxplotChart<X,Y> extends BoxplotChart<X,Y> implements Canvas
     private static final Logger logger = LoggerFactory.getLogger(CanvasBoxplotChart.class);
     private final Canvas canvas = new Canvas();
     private boolean redrawNeeded;
-    // hackery abounds. use a single private node to mark data points being drawn or not for the findObject method
+
+    // hackery abounds: use a single private node to mark data points being drawn or not for the findObject method
     private final Node node = new Circle();
 
     public CanvasBoxplotChart(Axis<X> xAxis, Axis<Y> yAxis, boolean showAllPoints) {
         super(xAxis, yAxis, showAllPoints);
-        timer.start();
+        sceneProperty().flatMap(Scene::windowProperty).flatMap(Window::showingProperty).subscribe(n -> {
+            if (Boolean.TRUE.equals(n))
+                timer.start();
+            else
+                timer.stop();;
+        });
     }
 
     @Override

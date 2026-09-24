@@ -5,7 +5,7 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseEvent;
 import qupath.lib.common.GeneralTools;
-import qupath.lib.gui.plots.HistogramDisplay;
+import qupath.lib.gui.plots.display.HistogramDisplay;
 
 class NumericTableCell<T> extends TableCell<T, Number> {
 
@@ -45,7 +45,7 @@ class NumericTableCell<T> extends TableCell<T, Number> {
 
     private void handleMouseClick(MouseEvent event) {
         if (event.isAltDown() && histogramDisplay != null) {
-            histogramDisplay.showHistogram(getTableColumn().getText());
+            histogramDisplay.showPlot(getTableColumn().getText());
             event.consume();
         }
     }

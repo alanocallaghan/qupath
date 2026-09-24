@@ -2,20 +2,33 @@ package qupath.lib.gui.plots.charts;
 
 import com.sun.javafx.charts.Legend;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
+import java.util.function.Function;
 import javafx.animation.AnimationTimer;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.ValueAxis;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
+import javafx.stage.Window;
+import javafx.util.Pair;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -23,6 +36,8 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.index.quadtree.Quadtree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.objects.PathObject;
+import qupath.lib.objects.classes.PathClass;
 
 public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements CanvasChart<X,Y> {
     private static final Logger logger = LoggerFactory.getLogger(CanvasScatterChart.class);
@@ -38,9 +53,21 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     private final Quadtree tree;
     private int colorIdx = 0;
     private final Canvas canvas = new Canvas();
+    private boolean redrawNeeded;
+
+    // List of all objects to display - we retain this only so that we can shuffle reproducibly if the seed changes
+    private final ObservableList<Data<X,Y>> allData = FXCollections.observableArrayList();
+    // Shuffled objects - this is the main list we use, in preference to allData
+    private final ObservableList<Data<X,Y>> shuffledData = FXCollections.observableArrayList();
+
+
     private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
-    private boolean redrawNeeded;
+
+    // todo implement subsampling
+    private final BooleanProperty autorangeToFullData = new SimpleBooleanProperty(true);
+    private final DoubleProperty maxPoints = new SimpleDoubleProperty(1);
+    private final Random random = new Random(123);
 
     /**
      * The size of markers on this chart
@@ -76,6 +103,23 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         return markerOpacity.get();
     }
 
+    // todo finish getters/setters + jdocs
+    public BooleanProperty autorangeToFullDataProperty() {
+        logger.warn("Currently autorangeToFullData does nothing on CanvasScatterChart.");
+        return this.autorangeToFullData;
+    }
+
+    public void setMaxPoints(double value) {
+        logger.warn("Currently maxPoints does nothing on CanvasScatterChart.");
+        this.maxPoints.set(value);
+    }
+
+    public void setRngSeed(int value) {
+        logger.warn("Currently RngSeed does nothing on CanvasScatterChart.");
+        this.random.setSeed(value);
+    }
+
+
     /**
      * Construct a CanvasScatterChart with the two axes and the defined color map.
      * @param xAxis the x-axis for this chart
@@ -99,7 +143,12 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         // unsure if this is idiomatic
         markerOpacity.subscribe(this::redraw);
         markerSize.subscribe(this::redraw);
-        timer.start();
+        sceneProperty().flatMap(Scene::windowProperty).flatMap(Window::showingProperty).subscribe(n -> {
+            if (Boolean.TRUE.equals(n))
+                timer.start();
+            else
+                timer.stop();;
+        });
     }
 
 
@@ -211,21 +260,30 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     }
 
     private void redraw() {
+        // todo shuffle so that one class isn't drawn on the other
         var context = canvas.getGraphicsContext2D();
         context.setGlobalAlpha(markerOpacity.get());
         context.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        List<Pair<String, Data<X,Y>>> allPoints = new ArrayList<>();
         for (Series<X,Y> series : getData()) {
-            var color = getColor(series.getName()); // todo transparency
             for (Data<X, Y> elem: series.getData()) {
-                context.setFill(color);
-                double size = getMarkerSize();
-                // fillOval uses bounding box coords
-                context.fillOval(
-                        getXAxis().getDisplayPosition(elem.getXValue()) - (size / 2),
-                        getYAxis().getDisplayPosition(elem.getYValue()) - (size / 2),
-                        size, size);
+                var p = new Pair<>(series.getName(), elem);
+                allPoints.add(p);
             }
         }
+        Collections.shuffle(allPoints);
+        double size = getMarkerSize();
+        for (var pair: allPoints) {
+            var color = getColor(pair.getKey());
+            context.setFill(color);
+            // fillOval uses bounding box coords
+            context.fillOval(
+                    getXAxis().getDisplayPosition(pair.getValue().getXValue()) - (size / 2),
+                    getYAxis().getDisplayPosition(pair.getValue().getYValue()) - (size / 2),
+                    size, size);
+
+        }
+
     }
 
     @Override
@@ -278,6 +336,41 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
             redraw();
         }
         redrawNeeded = false;
+        Region r;
+    }
+
+
+    /**
+     * Set the data to display in the plot.
+     * @param pathObjects the objects to display
+     * @param xFun a function to extract the x value to plot
+     * @param yFun a function to extract the y value to plot
+     */
+    public void setData(Collection<? extends PathObject> pathObjects,
+                        Function<PathObject, X> xFun,
+                        Function<PathObject, Y> yFun) {
+
+        // Find the represented classes & sort them
+        var newData = pathObjects
+                .stream()
+                .map(PathObject::getPathClass)
+                .distinct()
+                .sorted(Comparator.nullsFirst(PathClass::compareTo))
+                .map(pc -> {
+                    // create a series for each class so they appear nicely in the legend
+                    return new Series<>(
+                                    pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
+                                    FXCollections.observableArrayList(pathObjects.stream()
+                                            .filter(po -> po.getPathClass() == pc)
+                                            .map(po -> new Data<>(xFun.apply(po), yFun.apply(po), po))
+                                            .toList())
+                            );
+                })
+                .toList();
+
+        updateLegend();
+
+        this.getData().setAll(newData);
     }
 
 }

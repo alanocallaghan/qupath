@@ -2,6 +2,7 @@ package qupath.lib.gui.plots.charts;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,6 +33,7 @@ import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.objects.PathObject;
 
 public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     private static final Logger logger = LoggerFactory.getLogger(BoxplotChart.class);
@@ -390,4 +392,5 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
             valueAxis.invalidateRange(List.of(min, max));
         }
     }
+
 }

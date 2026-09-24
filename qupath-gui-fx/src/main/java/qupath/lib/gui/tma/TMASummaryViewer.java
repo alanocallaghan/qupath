@@ -113,7 +113,7 @@ import qupath.fx.utils.GridPaneUtils;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.plots.ChartTools;
-import qupath.lib.gui.plots.HistogramDisplay;
+import qupath.lib.gui.plots.display.HistogramDisplay;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.ObservableMeasurementTableData;
 import qupath.lib.gui.measure.PathTableData;
@@ -390,7 +390,7 @@ public class TMASummaryViewer {
 			if (scatterPane != null)
 				scatterPane.updateChart();
 			if (histogramDisplay != null)
-				histogramDisplay.refreshHistogram();
+				histogramDisplay.requestRefresh();
 		});
 		menuEdit.getItems().add(miResetMissingScores);
 		
@@ -466,7 +466,7 @@ public class TMASummaryViewer {
 			table.refresh();
 			updateSurvivalCurves();
 			if (histogramDisplay != null)
-				histogramDisplay.refreshHistogram();
+				histogramDisplay.requestRefresh();
 			updateSurvivalCurves();
 			if (scatterPane != null)
 				scatterPane.updateChart();
@@ -588,7 +588,7 @@ public class TMASummaryViewer {
             @Override
             public void onChanged(ListChangeListener.Change<? extends TMAEntry> c) {
                 if (histogramDisplay != null)
-                    histogramDisplay.refreshHistogram();
+                    histogramDisplay.requestRefresh();
                 updateSurvivalCurves();
                 if (scatterPane != null)
                     scatterPane.updateChart();
@@ -694,7 +694,7 @@ public class TMASummaryViewer {
 	private void handleTableContentChange() {
 		table.refresh();
 		model.refreshList();
-		histogramDisplay.refreshHistogram();
+		histogramDisplay.requestRefresh();
 		updateSurvivalCurves();
 		scatterPane.updateChart();
 		table.sort(); // Make sure we're still sorted, if need be
@@ -858,11 +858,11 @@ public class TMASummaryViewer {
 		
 		comboMainMeasurement.getSelectionModel().selectedItemProperty().addListener((v, o, n) -> {
 			histogramDisplay.refreshCombo();
-			histogramDisplay.showHistogram(n);
+			histogramDisplay.showPlot(n);
 			updateSurvivalCurves();
 		});
 		comboMeasurementMethod.getSelectionModel().selectedItemProperty().addListener((v, o, n) -> {
-			histogramDisplay.refreshHistogram();
+			histogramDisplay.requestRefresh();
 			scatterPane.updateChart();
 			updateSurvivalCurves();
 		});

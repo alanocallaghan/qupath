@@ -1,5 +1,8 @@
-package qupath.lib.gui.plots;
+package qupath.lib.gui.plots.display;
 
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.function.Function;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
@@ -10,10 +13,12 @@ import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Control;
@@ -39,24 +44,27 @@ import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
-import qupath.lib.gui.plots.charts.PathObjectScatterChart;
+import qupath.lib.gui.plots.SnapshotTools;
+import qupath.lib.gui.plots.builders.Charts;
+import qupath.lib.gui.plots.charts.CanvasScatterChart;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.objects.PathObject;
 
 import java.text.MessageFormat;
 import java.util.Collections;
+import qupath.lib.objects.classes.PathClass;
 
 /**
- * A wrapper around {@link PathObjectScatterChart} for displaying data about PathObject measurements.
+ * A wrapper around {@link CanvasScatterChart} for displaying data about PathObject measurements.
  */
-public class ScatterPlotDisplay {
+public class ScatterPlotDisplay implements PlotDisplay {
 
     private static final Logger logger = LoggerFactory.getLogger(ScatterPlotDisplay.class);
 
     private final static String KEY = "scatter.plot.";
 
     private final static IntegerProperty PROP_MAX_POINTS = PathPrefs.createPersistentPreference(
-            KEY + "maxPoints", 10_000
+            KEY + "maxPoints", 1_000_000
     );
 
     private final static IntegerProperty PROP_SEED = PathPrefs.createPersistentPreference(
@@ -89,11 +97,12 @@ public class ScatterPlotDisplay {
 
     private boolean isUpdating = false;
 
-    private final ObjectProperty<PathTableData<PathObject>> model = new SimpleObjectProperty<>();
+    private final ObjectProperty<PathTableData<?>> model = new SimpleObjectProperty<>();
     private final SearchableComboBox<String> comboNameX = new SearchableComboBox<>();
     private final SearchableComboBox<String> comboNameY = new SearchableComboBox<>();
     private final BorderPane pane = new BorderPane();
-    private final PathObjectScatterChart scatter;
+    private final CanvasScatterChart<Number, Number> scatter;
+//    private final PathObjectScatterChart scatter;
 
     // .asObject() required so we can bind to a spinner (and can't call inline or we'll be garbage-collected)
     private final ObjectProperty<Double> pointRadius = createWeakBoundProperty(PROP_POINT_RADIUS).asObject();
@@ -117,11 +126,13 @@ public class ScatterPlotDisplay {
         this.model.addListener(this::handleModelChange);
         BorderPane panelMain = new BorderPane();
 
-        scatter = new PathObjectScatterChart(QuPathGUI.getInstance().getViewer());
-        scatter.setPointRadius(pointRadius.get());
-        scatter.setPointOpacity(pointOpacity.get());
-        scatter.setRngSeed(seed.get());
-        scatter.setMaxPoints(maxPoints.get());
+        scatter = (CanvasScatterChart<Number, Number>) Charts.scatterChart()
+                .useCanvas(true)
+                .viewer(QuPathGUI.getInstance().getViewer())
+                .build();
+        scatter.setMarkerSize(pointRadius.get() * 2); // todo radius vs size
+        scatter.setMarkerOpacity(pointOpacity.get());
+
 
         var popup = new ContextMenu();
         var miCopy = new MenuItem(QuPathResources.getString("Charts.ScatterPlotDisplay.copyToClipboard"));
@@ -135,10 +146,10 @@ public class ScatterPlotDisplay {
         initProperties();
 
         comboNameX.getSelectionModel().selectedItemProperty().addListener((v, o, n) ->
-                refreshScatterPlot()
+                requestRefresh()
         );
         comboNameY.getSelectionModel().selectedItemProperty().addListener((v, o, n) ->
-                refreshScatterPlot()
+                requestRefresh()
         );
 
         var topPane = new GridPane();
@@ -167,8 +178,8 @@ public class ScatterPlotDisplay {
 
 
     private void initProperties() {
-        pointOpacity.addListener((v, o, n) -> scatter.setPointOpacity(n));
-        pointRadius.addListener((v, o, n) -> scatter.setPointRadius(n));
+        pointOpacity.addListener((v, o, n) -> scatter.setMarkerOpacity(n));
+        pointRadius.addListener((v, o, n) -> scatter.setMarkerSize(n * 2));
 
         scatter.verticalGridLinesVisibleProperty().bindBidirectional(showGrid);
         scatter.horizontalGridLinesVisibleProperty().bindBidirectional(showGrid);
@@ -187,15 +198,28 @@ public class ScatterPlotDisplay {
      * Set the value of {@link #modelProperty()}.
      * @param model the new model to set
      */
-    public void setModel(PathTableData<PathObject> model) {
+    public void setModel(PathTableData<?> model) {
         this.model.set(model);
+    }
+
+    @Override
+    public void showPlot(String... columns) {
+        if (columns.length != 2) {
+            logger.debug("Only two columns supported for scatter plot, supplied {}", columns.length);
+        }
+        if (comboNameX.getItems().contains(columns[0]) && comboNameY.getItems().contains(columns[1])) {
+            comboNameX.getSelectionModel().select(columns[0]);
+            comboNameY.getSelectionModel().select(columns[1]);
+        } else {
+            logger.debug("Unknown columns selected: {} and {}",  columns[0], columns[1]);
+        }
     }
 
     /**
      * Get the value of {@link #modelProperty()}.
      * @return the model
      */
-    public PathTableData<PathObject> getModel() {
+    public PathTableData<?> getModel() {
         return this.model.get();
     }
 
@@ -203,21 +227,21 @@ public class ScatterPlotDisplay {
      * Get property representing the model used with this display.
      * @return the model property
      */
-    public ObjectProperty<PathTableData<PathObject>> modelProperty() {
+    public ObjectProperty<PathTableData<?>> modelProperty() {
         return model;
     }
 
-    private void handleModelChange(ObservableValue<? extends PathTableData<PathObject>> observable,
-                                   PathTableData<PathObject> oldValue, PathTableData<PathObject> newValue) {
+    private void handleModelChange(ObservableValue<? extends PathTableData<?>> observable,
+                                   PathTableData<?> oldValue, PathTableData<?> newValue) {
         isUpdating = true;
         if (newValue != null) {
             updateForModel(newValue);
         }
         isUpdating = false;
-        refreshScatterPlot();
+        requestRefresh();
     }
 
-    private void updateForModel(PathTableData<PathObject> newValue) {
+    private void updateForModel(PathTableData<?> newValue) {
         comboNameX.getItems().setAll(newValue.getMeasurementNames());
         comboNameY.getItems().setAll(newValue.getMeasurementNames());
 
@@ -393,7 +417,7 @@ public class ScatterPlotDisplay {
 
         var vBoxLabels = new VBox();
         vBoxLabels.setSpacing(2);
-        int nWarningPoints = 40_000;
+        int nWarningPoints = 1_000_000;
         vBoxLabels.getChildren().add(labelPoints);
         vBoxLabels.setAlignment(Pos.CENTER_LEFT);
         VBox.setVgrow(labelPoints, Priority.SOMETIMES);
@@ -510,6 +534,11 @@ public class ScatterPlotDisplay {
     }
 
 
+    @Override
+    public String getName() {
+        return QuPathResources.getString("Measure.MeasurementTable.scatterPlot");
+    }
+
     /**
      * Get the pane containing the scatter plot and associated UI components, for addition to a scene.
      * @return A pane
@@ -521,7 +550,7 @@ public class ScatterPlotDisplay {
     /**
      * Refresh the scatter plot, in case the underlying data has been updated.
      */
-    public void refreshScatterPlot() {
+    public void requestRefresh() {
         var model = this.model.get();
         if (model == null || isUpdating) {
             resetScatterplot();
@@ -532,9 +561,68 @@ public class ScatterPlotDisplay {
         var y = comboNameY.getValue();
         if (x != null && y != null) {
             var items = model.getItems();
-            scatter.setDataFromTable(items, model, x, y);
+            setDataFromTable(scatter, items, model, x, y);
             totalPoints.set(items.size());
         }
+    }
+
+
+    /**
+     * Set the data to display in the plot from a table model.
+     * <p>
+     * This calls {@link CanvasScatterChart#setData(Collection, Function, Function)} in addition to setting the x and y labels.
+     *
+     * @param pathObjects the objects to display
+     * @param model the table model containing the measurements
+     * @param xMeasurement the column to use for x values
+     * @param yMeasurement the column to use for y values
+     */
+    public static void setDataFromTable(
+            CanvasScatterChart<Number, Number> scatter,
+            Collection<?> pathObjects,
+            PathTableData<?> model,
+            String xMeasurement, String yMeasurement) {
+
+        // todo don't love these casts just for abstraction
+        var pathModel = (PathTableData<PathObject>)model;
+        var pathCollection = (Collection<PathObject>)pathObjects;
+
+        scatter.setData(pathCollection,
+                p -> pathModel.getNumericValue(p, xMeasurement),
+                p -> pathModel.getNumericValue(p, yMeasurement));
+        scatter.getXAxis().setLabel(xMeasurement);
+        scatter.getYAxis().setLabel(yMeasurement);
+    }
+    /**
+     * Set the data to display in the plot.
+     * @param pathObjects the objects to display
+     * @param xFun a function to extract the x value to plot
+     * @param yFun a function to extract the y value to plot
+     */
+    public static <X,Y> void setData(CanvasScatterChart<X,Y> canvasScatterChart,
+                        Collection<? extends PathObject> pathObjects,
+                        Function<PathObject, X> xFun,
+                        Function<PathObject, Y> yFun) {
+
+        // Find the represented classes & sort them
+        var newData = pathObjects
+                .stream()
+                .map(PathObject::getPathClass)
+                .distinct()
+                .sorted(Comparator.nullsFirst(PathClass::compareTo))
+                .map(pc -> {
+                    // create a series for each class so they appear nicely in the legend
+                    return new XYChart.Series<>(
+                            pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
+                            FXCollections.observableArrayList(pathObjects.stream()
+                                    .filter(po -> po.getPathClass() == pc)
+                                    .map(po -> new XYChart.Data<>(xFun.apply(po), yFun.apply(po), po))
+                                    .toList())
+                    );
+                })
+                .toList();
+
+        canvasScatterChart.getData().setAll(newData);
     }
 
     private void resetScatterplot() {

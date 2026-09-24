@@ -66,8 +66,6 @@ import qupath.lib.projects.ProjectImageEntry;
 public class Charts {
 
 
-
-
 	public static void tryToOpen(ProjectImageEntry<BufferedImage> pie) {
 		try {
 			var current = QuPathGUI.getInstance().getViewer().getImageData();
@@ -93,6 +91,8 @@ public class Charts {
 		else if (viewer != null)
 			hierarchy = viewer.getHierarchy();
 		if (hierarchy == null)
+			return;
+		if (pathObject == null)
 			return;
 		if (addToSelection)
 			hierarchy.getSelectionModel().selectObjects(Collections.singletonList(pathObject));
@@ -123,7 +123,7 @@ public class Charts {
 		if (addToSelection)
 			hierarchy.getSelectionModel().selectObjects(objects);
 		else if (!objects.isEmpty())
-			hierarchy.getSelectionModel().setSelectedObjects(objects, objects.get(0).getParent());
+			hierarchy.getSelectionModel().setSelectedObjects(objects, objects.getFirst().getParent());
 	}
 
 	// See https://stackoverflow.com/questions/17164375/subclassing-a-java-builder-class/34741836#34741836
@@ -331,10 +331,6 @@ public class Charts {
 		 * @return the chart
 		 */
 		public S build() {
-			// I think this is a fair assumption...
-			if (imageData == null && viewer != null) {
-				imageData = viewer.getImageData();
-			}
 			var chart = createNewChart();
 			updateChart(chart);
 			return chart;
