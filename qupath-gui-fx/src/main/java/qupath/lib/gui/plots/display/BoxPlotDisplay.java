@@ -5,9 +5,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import javafx.beans.InvalidationListener;
-import javafx.beans.Observable;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
@@ -53,7 +50,10 @@ import qupath.lib.objects.classes.PathClass;
 
 // todo very heavily copied from scatterplotdisplay... needs to be refactored along with histogramdisplay
 // todo create abstractplotdisplay class?
-public class BoxPlotDisplay implements PlotDisplay {
+/**
+ * A wrapper around a box plot for displaying PathObjects.
+ */
+public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(BoxPlotDisplay.class);
 
@@ -70,16 +70,20 @@ public class BoxPlotDisplay implements PlotDisplay {
     // todo showAllPoints as option
 
     private final BorderPane pane = new BorderPane();
-    private final ObjectProperty<PathTableData<?>> model = new SimpleObjectProperty<>();
+    private final ObjectProperty<PathTableData<T>> model = new SimpleObjectProperty<>();
     private boolean isUpdating = false;
 
-    public BoxPlotDisplay(PathTableData<?> model) {
+    /**
+     * Create a boxplot display with the specified model
+     * @param model the model
+     */
+    public BoxPlotDisplay(PathTableData<T> model) {
         this();
         this.model.set(model);
     }
 
     /**
-     * Create a scatter plot from a table of PathObject measurements.
+     * Create a boxplot from a table of PathObject measurements.
      */
     public BoxPlotDisplay() {
         this.model.addListener(this::handleModelChange);
@@ -89,12 +93,10 @@ public class BoxPlotDisplay implements PlotDisplay {
                 .useCanvas(true)
                 .viewer(QuPathGUI.getInstance().getViewer())
                 .build();
-        boxplot.setMarkerSize(pointRadius.get() * 2); // todo radius vs size
-        boxplot.setMarkerOpacity(pointOpacity.get());
 
         var popup = new ContextMenu();
         var miCopy = new MenuItem(QuPathResources.getString("Charts.ScatterPlotDisplay.copyToClipboard"));
-        miCopy.setOnAction(e -> SnapshotTools.copyScaledSnapshotToClipboard(boxplot, 4));
+        miCopy.setOnAction(_ -> SnapshotTools.copyScaledSnapshotToClipboard(boxplot, 4));
         popup.getItems().add(miCopy);
         boxplot.setOnContextMenuRequested(e -> popup.show(
                 boxplot.getScene().getWindow(), e.getScreenX(), e.getScreenY()));
@@ -104,7 +106,8 @@ public class BoxPlotDisplay implements PlotDisplay {
         initProperties();
 
         comboNameY.getSelectionModel().selectedItemProperty().addListener(_ -> requestRefresh());
-        comboPathClasses.getCheckModel().getCheckedItems().addListener((ListChangeListener<PathClass>) c -> requestRefresh());
+        comboPathClasses.getCheckModel().getCheckedItems().addListener((ListChangeListener<PathClass>) _ -> requestRefresh());
+        FXUtils.installSelectAllOrNoneMenu(comboPathClasses);
 
         var topPane = new GridPane();
         var labelY = new Label(QuPathResources.getString("Charts.ScatterPlotDisplay.y"));
@@ -132,9 +135,116 @@ public class BoxPlotDisplay implements PlotDisplay {
         pane.setPadding(new Insets(10, 10, 10, 10));
     }
 
+    @Override
+    public ObjectProperty<PathTableData<T>> modelProperty() {
+        return model;
+    }
 
-    private void handleModelChange(ObservableValue<? extends PathTableData<?>> observable,
-                                   PathTableData<?> oldValue, PathTableData<?> newValue) {
+    @Override
+    public String getName() {
+        return QuPathResources.getString("Measure.MeasurementTable.boxPlot");
+    }
+
+    @Override
+    public Pane getPane() {
+        return pane;
+    }
+
+    @Override
+    public void requestRefresh() {
+        var model = this.model.get();
+        if (model == null || isUpdating) {
+            return;
+        }
+        // Awkward - but SearchableComboBox tends to set values temporarily to null
+        var y = comboNameY.getValue();
+        if (y != null) {
+            var items = model.getItems();
+            var classes = new HashSet<>(comboPathClasses.getCheckModel().getCheckedItems());
+            // only apply filter if one or more classes (including null class) are actually selected
+            Function<PathClass,Boolean> filter = classes.isEmpty() ?  _ -> true: classes::contains;
+            setDataFromTable(items, model, filter, y);
+        }
+    }
+
+    @Override
+    public void setModel(PathTableData<T> model) {
+        this.model.set(model);
+    }
+
+    @Override
+    public PathTableData<T> getModel() {
+        return model.get();
+    }
+
+    @Override
+    public void plotColumns(String... columns) {
+        if (columns.length != 1) {
+            logger.debug("Only one column is valid for boxplot, supplied {}", columns.length);
+            return;
+        }
+        if (comboNameY.getItems().contains(columns[0])) {
+            comboNameY.getSelectionModel().select(columns[0]);
+        }
+        requestRefresh();
+    }
+
+    /**
+     * Set the data to display in the plot from a table model.
+     * <p>
+     * This calls {@link setData(Collection, Function, Function)} in addition to setting the x and y labels.
+     *
+     * @param pathObjects the objects to display
+     * @param model the table model containing the measurements
+     * @param yMeasurement the column to use for y values
+     */
+    private void setDataFromTable(
+            Collection<T> pathObjects,
+            PathTableData<T> model,
+            Function<PathClass, Boolean> classFilter,
+            String yMeasurement) {
+
+        setData(pathObjects,
+                classFilter,
+                p -> model.getNumericValue(p, yMeasurement));
+        boxplot.getYAxis().setLabel(yMeasurement);
+    }
+
+    /**
+     * Set the data to display in the plot.
+     * @param pathObjects the objects to display
+     * @param yFun a function to extract the y value to plot
+     */
+    private void setData(
+            Collection<T> pathObjects,
+            Function<PathClass, Boolean> classFilter,
+            Function<T, Number> yFun) {
+
+        // todo if the filter is null or something, then plot everything in one series (unlabelled)
+        // find the represented classes & sort them
+        var newData = pathObjects
+                .stream()
+                .map(PathObject::getPathClass)
+                .filter(classFilter::apply)
+                .distinct()
+                .sorted(Comparator.nullsFirst(PathClass::compareTo))
+                .map(pc -> {
+                    // create a series for each class so they appear nicely in the legend
+                    return new XYChart.Series<>(
+                            pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
+                            FXCollections.observableArrayList(pathObjects.stream()
+                                    .filter(po -> po.getPathClass() == pc)
+                                    .map(po -> new XYChart.Data<>(pc.toString(), yFun.apply(po), po))
+                                    .toList())
+                    );
+                })
+                .toList();
+
+        boxplot.getData().setAll(newData);
+    }
+
+    private void handleModelChange(ObservableValue<? extends PathTableData<T>> observable,
+                                   PathTableData<T> oldValue, PathTableData<T> newValue) {
         isUpdating = true;
         if (newValue != null) {
             updateForModel(newValue);
@@ -147,7 +257,7 @@ public class BoxPlotDisplay implements PlotDisplay {
         return createDisplayOptionsPane();
     }
 
-    private void updateForModel(PathTableData<?> newValue) {
+    private void updateForModel(PathTableData<T> newValue) {
         // todo derived classes or classifications
         updatePathClasses(newValue);
         comboNameY.getItems().setAll(newValue.getMeasurementNames());
@@ -174,8 +284,8 @@ public class BoxPlotDisplay implements PlotDisplay {
         }
     }
 
-    private void updatePathClasses(PathTableData<?> newValue) {
-        var objects = (Collection<PathObject>)newValue.getItems();
+    private void updatePathClasses(PathTableData<T> newValue) {
+        var objects = newValue.getItems();
         Function<PathObject, PathClass> collector = PathObject::getPathClass;
         if (baseClassOnly.get()) {
             collector = (po) -> po.getPathClass().getBaseClass();
@@ -272,68 +382,9 @@ public class BoxPlotDisplay implements PlotDisplay {
         return new TitledPane(QuPathResources.getString("Charts.ScatterPlotDisplay.display"), hbox);
     }
 
-    /**
-     * Set the data to display in the plot from a table model.
-     * <p>
-     * This calls {@link setData(BoxplotChart, Collection, Function, Function)} in addition to setting the x and y labels.
-     *
-     * @param pathObjects the objects to display
-     * @param model the table model containing the measurements
-     * @param yMeasurement the column to use for y values
-     */
-    public static void setDataFromTable(
-            BoxplotChart<String, Number> boxplot,
-            Collection<?> pathObjects,
-            PathTableData<?> model,
-            Function<PathClass, Boolean> classFilter,
-            String yMeasurement) {
-
-        // todo don't love these casts just for abstraction
-        var pathModel = (PathTableData<PathObject>)model;
-        var pathCollection = (Collection<PathObject>)pathObjects;
-
-        setData(boxplot, pathCollection, classFilter, p -> pathModel.getNumericValue(p, yMeasurement));
-        boxplot.getYAxis().setLabel(yMeasurement);
-    }
-
-    /**
-     * Set the data to display in the plot.
-     * @param pathObjects the objects to display
-     * @param yFun a function to extract the y value to plot
-     */
-    public static void setData(
-            BoxplotChart<String,Number> boxplotChart,
-            Collection<? extends PathObject> pathObjects,
-            Function<PathClass, Boolean> classFilter,
-            Function<PathObject, Number> yFun) {
-
-        // todo if the filter is null or something, then plot everything in one series (unlabelled)
-        // find the represented classes & sort them
-        var newData = pathObjects
-                .stream()
-                .map(PathObject::getPathClass)
-                .filter(classFilter::apply)
-                .distinct()
-                .sorted(Comparator.nullsFirst(PathClass::compareTo))
-                .map(pc -> {
-                    // create a series for each class so they appear nicely in the legend
-                    return new XYChart.Series<>(
-                            pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
-                            FXCollections.observableArrayList(pathObjects.stream()
-                                    .filter(po -> po.getPathClass() == pc)
-                                    .map(po -> new XYChart.Data<>(pc.toString(), yFun.apply(po), po))
-                                    .toList())
-                    );
-                })
-                .toList();
-
-        boxplotChart.getData().setAll(newData);
-    }
-
-
     private void initProperties() {
-        pointOpacity.addListener((v, o, n) -> boxplot.setMarkerOpacity(n.doubleValue()));
-        pointRadius.addListener((v, o, n) -> boxplot.setMarkerSize(n.doubleValue() * 2));
+        pointOpacity.bindBidirectional(boxplot.markerOpacityProperty());
+        pointRadius.bindBidirectional(boxplot.markerRadiusProperty());
 
         boxplot.verticalGridLinesVisibleProperty().bindBidirectional(showGrid);
         boxplot.horizontalGridLinesVisibleProperty().bindBidirectional(showGrid);
@@ -359,47 +410,4 @@ public class BoxPlotDisplay implements PlotDisplay {
         return label;
     }
 
-    @Override
-    public String getName() {
-        return QuPathResources.getString("Measure.MeasurementTable.boxPlot");
-    }
-
-    @Override
-    public Pane getPane() {
-        return pane;
-    }
-
-    @Override
-    public void requestRefresh() {
-        var model = this.model.get();
-        if (model == null || isUpdating) {
-            return;
-        }
-        // Awkward - but SearchableComboBox tends to set values temporarily to null
-        var y = comboNameY.getValue();
-        if (y != null) {
-            var items = model.getItems();
-            var classes = new HashSet<>(comboPathClasses.getCheckModel().getCheckedItems());
-            // only apply filter if one or more classes (including null class) are actually selected
-            Function<PathClass,Boolean> filter = classes.isEmpty() ?  _ -> true: classes::contains;
-            setDataFromTable(boxplot, items, model, filter, y);
-        }
-    }
-
-    @Override
-    public void setModel(PathTableData<?> model) {
-        this.model.set(model);
-    }
-
-    @Override
-    public void plotColumns(String... columns) {
-        if (columns.length != 1) {
-            logger.debug("Only one column is valid for boxplot, supplied {}", columns.length);
-            return;
-        }
-        if (comboNameY.getItems().contains(columns[0])) {
-            comboNameY.getSelectionModel().select(columns[0]);
-        }
-        requestRefresh();
-    }
 }

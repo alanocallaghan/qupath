@@ -4,6 +4,11 @@ import java.util.Optional;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.chart.XYChart;
 
+/**
+ * A canvas-based chart
+ * @param <X> the x-axis type (numeric or string, probably)
+ * @param <Y> the y-axis type (numeric or string, probably)
+ */
 public interface CanvasChart<X, Y> {
     // note that canvas could be an ObjectProperty
 

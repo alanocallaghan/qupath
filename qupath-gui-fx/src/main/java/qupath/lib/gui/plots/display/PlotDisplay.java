@@ -1,12 +1,15 @@
 package qupath.lib.gui.plots.display;
 
+import javafx.beans.property.ObjectProperty;
 import javafx.scene.layout.Pane;
 import qupath.lib.gui.measure.PathTableData;
 
 /**
- * Wrapping charts for displaying data about PathObject measurements and classes, and similar objects.
+ * A wrapper for a chart for displaying data about PathObject measurements and classes, and similar objects.
  */
-public interface PlotDisplay {
+public interface PlotDisplay<T> {
+
+    ObjectProperty<PathTableData<T>> modelProperty();
 
     /**
      * Return the name of this type of plot, e.g., "Box plot", "Scatter plot", "Histogram"
@@ -29,7 +32,9 @@ public interface PlotDisplay {
      * Update the data model underlying the data
      * @param model the data model
      */
-    void setModel(PathTableData<?> model);
+    void setModel(PathTableData<T> model);
+
+    PathTableData<T> getModel();
 
     /**
      * Update plot for specified data columns.

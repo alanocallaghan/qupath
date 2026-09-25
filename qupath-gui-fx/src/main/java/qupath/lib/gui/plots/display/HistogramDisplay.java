@@ -23,9 +23,11 @@
 
 package qupath.lib.gui.plots.display;
 
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.Property;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleLongProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Insets;
@@ -46,7 +48,6 @@ import qupath.lib.gui.plots.charts.HistogramChart.HistogramData;
 import qupath.lib.gui.dialogs.ParameterPanelFX;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
-import qupath.lib.objects.PathObject;
 import qupath.lib.plugins.parameters.IntParameter;
 import qupath.lib.plugins.parameters.ParameterChangeListener;
 import qupath.lib.plugins.parameters.ParameterList;
@@ -60,14 +61,12 @@ import java.util.List;
  * Wrapper close to enable the generation and display of histograms relating to a data table.
  * Other UI controls are provided to enable selection of specific data columns for display in the histogram.
  * 
- * @author Pete Bankhead
- *
  */
-public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
+public class HistogramDisplay<T> implements PlotDisplay<T>, ParameterChangeListener {
 
 	private static final Logger logger = LoggerFactory.getLogger(HistogramDisplay.class);
 
-	private PathTableData<?> model;
+	private final ObjectProperty<PathTableData<T>> model = new SimpleObjectProperty<>();
 	private final BorderPane pane = new BorderPane();
 
 	private final SearchableComboBox<String> comboName = new SearchableComboBox<>();
@@ -78,7 +77,6 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 
 	private int currentBins;
 	private double[] currentValues;
-	private String currentColumn = null;
 
 	private final ParameterList paramsHistogram = new ParameterList()
 			.addChoiceParameter(
@@ -120,9 +118,9 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 	 * @param model the table data for histogramming
 	 * @param showTable if true, include a measurement summary table along with the histogram
 	 */
-	public HistogramDisplay(final PathTableData<?> model, final boolean showTable) {
+	public HistogramDisplay(final PathTableData<T> model, final boolean showTable) {
 		String selectColumn = null;
-		this.model = model;
+		this.model.set(model);
 		comboName.getItems().setAll(model.getMeasurementNames());
 		if (comboName.getItems().isEmpty()) {
 			logger.debug("No items to display!");
@@ -145,7 +143,7 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 		colName.setCellValueFactory(p -> new SimpleStringProperty(p.getValue().getName()));
 		TableColumn<Property<Number>, Number> colValue = new TableColumn<>(QuPathResources.getString("Charts.HistogramDisplay.value"));
 		colValue.setCellValueFactory(TableColumn.CellDataFeatures::getValue);
-		colValue.setCellFactory(column -> {
+		colValue.setCellFactory(_ -> {
 			return new TableCell<>() {
                 @Override
                 protected void updateItem(Number item, boolean empty) {
@@ -174,8 +172,8 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 		panelMain.setCenter(histogramChart);
 
 		selectedColumn.bindBidirectional(comboName.valueProperty());
-		selectedColumn.addListener((v, o, n) -> {
-			setHistogram(model, n);
+		selectedColumn.addListener((_) -> {
+			requestRefresh();
 		});
 		histogramChart.setShowTickLabels(paramsHistogram.getBooleanParameterValue("drawAxes"));
 
@@ -206,7 +204,7 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 
 		pane.setPadding(new Insets(10, 10, 10, 10));
 
-		setHistogram(model, comboName.getSelectionModel().getSelectedItem());
+		requestRefresh();
 	}
 	
 	/**
@@ -214,8 +212,8 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 	 */
 	public void refreshCombo() {
 		String selected = comboName.getSelectionModel().getSelectedItem();
-		if (!model.getAllNames().equals(comboName.getItems())) {
-			comboName.getItems().setAll(model.getAllNames());
+		if (!getModel().getAllNames().equals(comboName.getItems())) {
+			comboName.getItems().setAll(getModel().getAllNames());
 			comboName.getSelectionModel().select(selected);
 		}
 	}
@@ -244,25 +242,34 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 	}
 
 	@Override
+	public ObjectProperty<PathTableData<T>> modelProperty() {
+		return model;
+	}
+
+	@Override
 	public String getName() {
 		return QuPathResources.getString("Measure.MeasurementTable.histogram");
 	}
 
-	/**
-	 * Get the pane containing the histogram and associated UI components, for addition to a scene.
-	 * @return The pane
-	 */
+	@Override
 	public Pane getPane() {
 		return pane;
 	}
 
 	@Override
-	public void setModel(PathTableData<?> model) {
-		this.model = model;
+	public void setModel(PathTableData<T> model) {
+		this.model.set(model);
 	}
 
-	void setHistogram(final PathTableData<?> model, final String columnName) {
-		setModel(model);
+	@Override
+	public PathTableData<T> getModel() {
+		return model.get();
+	}
+
+	@Override
+	public void requestRefresh() {
+		final String columnName = selectedColumn.get();
+		var model = getModel();
 		if (model != null && model.getMeasurementNames().contains(columnName)) {
 			double[] values = model.getDoubleValues(columnName);
 			int nBins = paramsHistogram.getIntParameterValue("nBins");
@@ -301,12 +308,25 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 
 			updateTable(histogram);
 
-			currentColumn = columnName;
 			currentBins = nBins;
 			currentValues = values;
 		} else {
 			histogramChart.getHistogramData().clear();
 			currentValues = null;
+		}
+	}
+
+	@Override
+	public void plotColumns(final String... columns) {
+		if (columns.length != 1) {
+			logger.debug("Only one column support for histogram, supplied {}", columns.length);
+			return;
+		}
+		if (comboName.getItems().contains(columns[0])) {
+			selectedColumn.set(columns[0]);
+		}
+		else {
+			logger.debug("Unknown column requested: {}", columns[0]);
 		}
 	}
 
@@ -325,29 +345,6 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 			logger.warn("Histogram counts transform not supported: {}", transform);
 	}
 
-
-	/**
-	 * Refresh the currently-displayed histogram (e.g. because underlying data has changed).
-	 */
-	public void requestRefresh() {
-		setHistogram(model, currentColumn);
-	}
-
-	@Override
-	public void plotColumns(final String... columns) {
-		if (columns.length != 1) {
-			logger.debug("Only one column support for histogram, supplied {}", columns.length);
-			return;
-		}
-		if (comboName.getItems().contains(columns[0])) {
-			comboName.getSelectionModel().select(columns[0]);
-		}
-		else {
-			logger.debug("Unknown column requested: {}", columns[0]);
-		}
-	}
-
-
 	@Override
 	public void parameterChanged(ParameterList parameterList, String key, boolean isAdjusting) {
 		if ("countsTransform".equals(key)) {
@@ -358,15 +355,13 @@ public class HistogramDisplay implements PlotDisplay, ParameterChangeListener {
 		} else if ("drawAxes".equals(key)) {
 			histogramChart.setShowTickLabels(paramsHistogram.getBooleanParameterValue("drawAxes"));
 		} else if ("nBins".equals(key)) {
-			setHistogram(model, comboName.getSelectionModel().getSelectedItem());
+			requestRefresh();
 		} else if ("animate".equals(key)) {
 			histogramChart.setAnimated(paramsHistogram.getBooleanParameterValue("animate"));
 		}
 	}
 
-
-
-	void updateTable(final Histogram histogram) {
+	private void updateTable(final Histogram histogram) {
 		if (histogram == null) {
 			List<Property<Number>> stats = new ArrayList<>();
 			stats.add(new SimpleDoubleProperty(null, QuPathResources.getString("Charts.HistogramDisplay.count"), Double.NaN));

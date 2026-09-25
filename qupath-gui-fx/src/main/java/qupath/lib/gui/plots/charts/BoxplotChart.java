@@ -35,93 +35,27 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * A node-based BoxplotChart
+ * @param <X> string or numeric x-axis type
+ * @param <Y> string or numeric y-axis type
+ */
 public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     private static final Logger logger = LoggerFactory.getLogger(BoxplotChart.class);
-    protected final Orientation orientation;
+    private final Orientation orientation;
     private final Random random = new Random(42);
     protected final CategoryAxis categoryAxis;
     protected final ValueAxis<Number> valueAxis;
     protected Function<Data<X, Y>, String> getCategory;
     protected Function<Data<X, Y>, Number> getNumeric;
 
-    protected final BooleanProperty drawAllPoints = new SimpleBooleanProperty(false);
-    private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
+    private final BooleanProperty drawAllPoints = new SimpleBooleanProperty(false);
+    private final DoubleProperty markerRadius = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
     private final IntegerProperty randomSeed = new SimpleIntegerProperty(0);
 
     // to enable us to lookup points...
     private final Map<Data<X,Y>, Double> jitterValues = new HashMap<>();
-
-    protected double getJitterValue(Data<X,Y> data) {
-        return jitterValues.computeIfAbsent(data, (_) -> jitter());
-    }
-
-    /**
-     * The size of markers on this chart
-     * @return the property corresponding to marker size
-     */
-    public DoubleProperty markerSizeProperty() {
-        return markerSize;
-    }
-
-    public void setMarkerSize(double value) {
-        if (value <= 0 || !Double.isFinite(value)) return;
-        this.markerSize.set(value);
-    }
-
-    public double getMarkerSize() {
-        return markerSize.get();
-    }
-
-
-    /**
-     * The random seed used to jitter points
-     * @return the property corresponding to random seed
-     */
-    public IntegerProperty randomSeedProperty() {
-        return randomSeed;
-    }
-
-    public void setRandomSeed(int value) {
-        this.markerSize.set(value);
-    }
-
-    public int getRandomSeed() {
-        return randomSeed.get();
-    }
-
-    /**
-     * Whether to draw all points, or only outliers
-     * @return the corresponding boolean property
-     */
-    public BooleanProperty drawAllPointsProperty() {
-        return drawAllPoints;
-    }
-
-    public void setDrawAllPoints(boolean value) {
-        this.drawAllPoints.set(value);
-    }
-
-    public boolean getDrawAllPoints() {
-        return drawAllPoints.get();
-    }
-
-    /**
-     * The opacity of markers in this plot
-     * @return the property corresponding to marker opacity
-     */
-    public DoubleProperty markerOpacityProperty() {
-        return markerOpacity;
-    }
-
-    public void setMarkerOpacity(double value) {
-        if (value <= 0 || value > 1 || !Double.isFinite(value)) return;
-        this.markerOpacity.set(value);
-    }
-
-    public double getMarkerOpacity() {
-        return markerOpacity.get();
-    }
 
     /**
      * Constructs a XYChart given the two axes. The initial content for the chart
@@ -152,12 +86,14 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         }
         if (xAxis instanceof CategoryAxis) {
             categoryAxis = (CategoryAxis) xAxis;
+            //noinspection unchecked - we know we have one of each
             valueAxis = (ValueAxis<Number>) yAxis;
             orientation = Orientation.HORIZONTAL;
             getCategory = d -> (String) d.getXValue();
             getNumeric = d -> (Number)d.getYValue();
         } else {
             categoryAxis = (CategoryAxis) yAxis;
+            //noinspection unchecked - we know we have one of each
             valueAxis = (ValueAxis<Number>) xAxis;
             orientation = Orientation.VERTICAL;
             getNumeric = d -> (Number)d.getXValue();
@@ -167,8 +103,16 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         if (getData() == null) {
             setData(FXCollections.observableArrayList());
         }
-        markerSize.addListener((_) -> layoutPlotChildren());
-        markerOpacity.addListener(_ -> layoutPlotChildren());
+        markerRadius.addListener((_) -> layoutPlotChildren());
+        markerOpacity.addListener((_, o, n) -> {
+            double d = n.doubleValue();
+            if (d <= 0 || d > 1 || !Double.isFinite(d)) {
+                logger.debug("Marker opacity out of bounds: {}", d);
+                markerOpacity.set(o.doubleValue());
+                return;
+            }
+            layoutPlotChildren();
+        });
         this.drawAllPoints.addListener(_ -> layoutPlotChildren());
         this.randomSeed.addListener(_ -> {
             jitterValues.clear();
@@ -176,11 +120,120 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         });
     }
 
+    /**
+     * The size of markers on this chart
+     * @return the property corresponding to marker size
+     */
+    public DoubleProperty markerRadiusProperty() {
+        return markerRadius;
+    }
+
+    /**
+     * Set the marker size (diameter)
+     * @param value the new value
+     */
+    public void setMarkerRadius(double value) {
+        if (value <= 0 || !Double.isFinite(value)) return;
+        this.markerRadius.set(value);
+    }
+
+    /**
+     * Get the marker size (diameter)
+     * @return the current value
+     */
+    public double getMarkerRadius() {
+        return markerRadius.get();
+    }
+
+    /**
+     * The random seed used to jitter points
+     * @return the property corresponding to random seed
+     */
+    public IntegerProperty randomSeedProperty() {
+        return randomSeed;
+    }
+
+    /**
+     * Set the random seed
+     * @param value the new value
+     */
+    public void setRandomSeed(int value) {
+        this.markerRadius.set(value);
+    }
+
+    /**
+     * Get the random seed
+     * @return the current value
+     */
+    public int getRandomSeed() {
+        return randomSeed.get();
+    }
+
+    /**
+     * Whether to draw all points, or only outliers
+     * @return the corresponding boolean property
+     */
+    public BooleanProperty drawAllPointsProperty() {
+        return drawAllPoints;
+    }
+
+    /**
+     * Control whether to draw all points, or only outliers
+     * @param value the new value
+     */
+    public void setDrawAllPoints(boolean value) {
+        this.drawAllPoints.set(value);
+    }
+
+    /**
+     * Retrieve whether to draw all points, or only outliers
+     * @return the current value
+     */
+    public boolean getDrawAllPoints() {
+        return drawAllPoints.get();
+    }
+
+    /**
+     * The opacity of markers in this plot
+     * @return the property corresponding to marker opacity
+     */
+    public DoubleProperty markerOpacityProperty() {
+        return markerOpacity;
+    }
+
+    /**
+     * Set the opacity of markers in this plot
+     * @param value the new value. Must be in (0,1].
+     */
+    public void setMarkerOpacity(double value) {
+        this.markerOpacity.set(value);
+    }
+
+    /**
+     * Get the current marker opacity
+     * @return the current value
+     */
+    public double getMarkerOpacity() {
+        return markerOpacity.get();
+    }
+
+
+    protected double getJitterValue(Data<X,Y> data) {
+        return jitterValues.computeIfAbsent(data, (_) -> jitter());
+    }
+
+    /**
+     * Get the orientation of the plot
+     * @return the immutable orientation
+     */
+    protected Orientation getOrientation() {
+        return orientation;
+    }
 
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {
         if (item.getNode() == null) {
-            Node node = createPoint(item);
+            Node node = createPoint();
             item.setNode(node);
             getPlotChildren().add(item.getNode());
             node.getStyleClass().setAll("chart-symbol", "series" + getData().indexOf(series), "data" + itemIndex);
@@ -188,7 +241,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         requestChartLayout();
     }
 
-    private Node createPoint(Data<X, Y> item) {
+    private Node createPoint() {
         var symbol = new StackPane();
         symbol.setAccessibleRole(AccessibleRole.TEXT);
         symbol.setAccessibleRoleDescription("Point");
@@ -204,7 +257,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     @Override
     protected void dataItemChanged(Data<X, Y> item) {
-        item.setNode(createPoint(item));
+        item.setNode(createPoint());
         getPlotChildren().add(item.getNode());
         requestChartLayout();
     }
@@ -266,6 +319,13 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         getPlotChildren().add(box);
     }
 
+    // todo series handling
+    /**
+     * The method used to draw a data point. This is by default quite inefficient and can be overridden.
+     * @param data the data point
+     * @param catPos the category position
+     * @param boxParams the boxplot parameters
+     */
     protected void drawPoint(Data<X, Y> data, double catPos, BoxParams boxParams) {
         Group containerGroup = new Group();
         getPlotChildren().add(containerGroup);
@@ -284,7 +344,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
         var j = getJitterValue(data);
         double x = orientation == Orientation.VERTICAL ?  valPos: catPos + j;
         double y = orientation == Orientation.VERTICAL ? catPos + j: valPos;
-        // nudge points based on point size (i.e., don't centre them on the topleft of the point).
+        // nudge points based on point size (i.e., don't center them on the top left).
         double halfWidth = node.getBoundsInLocal().getWidth() / 2;
         double halfHeight = node.getBoundsInLocal().getHeight() / 2;
         node.setLayoutX(x - halfWidth);
@@ -294,7 +354,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
 
     protected record BoxParams(double lowWhisk, double lowQuartile, double median, double upQuartile, double upWhisk) {}
 
-    protected BoxParams calculateBoxParams(List<Data<X, Y>> datas) {
+    private BoxParams calculateBoxParams(List<Data<X, Y>> datas) {
         // sort for the sake of binary search; percentile could cope with unsorted
         double[] doubles = datas.stream().map(getNumeric)
                 .mapToDouble(Number::doubleValue)
@@ -319,7 +379,7 @@ public class BoxplotChart<X, Y> extends XYChart<X, Y> {
     }
 
     // todo this should in future handle series, I think
-    protected @NonNull Map<String, List<Data<X, Y>>> collectValuesByCategory() {
+    private @NonNull Map<String, List<Data<X, Y>>> collectValuesByCategory() {
         Map<String, List<Data<X,Y>>> valuesByCategory = new LinkedHashMap<>();
         for (var series : getData()) {
             for (var data : series.getData()) {

@@ -316,10 +316,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         return DEFAULT_COLORS.get(colorIdx++);
     }
 
-    public Canvas getCanvas() {
-        return canvas;
-    }
-
 
     private final AnimationTimer timer = new AnimationTimer() {
 
@@ -338,38 +334,11 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         Region r;
     }
 
-
-    /**
-     * Set the data to display in the plot.
-     * @param pathObjects the objects to display
-     * @param xFun a function to extract the x value to plot
-     * @param yFun a function to extract the y value to plot
-     */
-    public void setData(Collection<? extends PathObject> pathObjects,
-                        Function<PathObject, X> xFun,
-                        Function<PathObject, Y> yFun) {
-
-        // Find the represented classes & sort them
-        var newData = pathObjects
-                .stream()
-                .map(PathObject::getPathClass)
-                .distinct()
-                .sorted(Comparator.nullsFirst(PathClass::compareTo))
-                .map(pc -> {
-                    // create a series for each class so they appear nicely in the legend
-                    return new Series<>(
-                                    pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
-                                    FXCollections.observableArrayList(pathObjects.stream()
-                                            .filter(po -> po.getPathClass() == pc)
-                                            .map(po -> new Data<>(xFun.apply(po), yFun.apply(po), po))
-                                            .toList())
-                            );
-                })
-                .toList();
-
-        updateLegend();
-
-        this.getData().setAll(newData);
+    @Override
+    public Canvas getCanvas() {
+        return canvas;
     }
+
+
 
 }

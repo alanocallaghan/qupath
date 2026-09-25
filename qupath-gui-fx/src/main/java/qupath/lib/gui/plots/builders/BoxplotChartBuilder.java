@@ -33,7 +33,7 @@ public class BoxplotChartBuilder extends Charts.XYCategoryChartBuilder<BoxplotCh
             chart = new BoxplotChart<>(xAxis, yAxis, showAllPoints);
         }
         chart.setMarkerOpacity(markerOpacity);
-        chart.setMarkerSize(markerSize);
+        chart.setMarkerRadius(markerSize);
         return chart;
     }
 

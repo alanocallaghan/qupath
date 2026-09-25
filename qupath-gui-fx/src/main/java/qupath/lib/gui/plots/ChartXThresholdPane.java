@@ -49,27 +49,28 @@ import java.util.Map;
 /**
  * Pane that can be used to contain an XYChart, adding adjustable thresholds to be displayed.
  */
-public class ChartThresholdPane extends BorderPane {
+public class ChartXThresholdPane extends BorderPane {
 
-    private static final Logger logger = LoggerFactory.getLogger(ChartThresholdPane.class);
+    private static final Logger logger = LoggerFactory.getLogger(ChartXThresholdPane.class);
 
     private XYChart<Number, Number> chart;
-    private NumberAxis xAxis, yAxis;
+    private final NumberAxis xAxis;
+    private final NumberAxis yAxis;
 
-    private DoubleProperty lineWidth = new SimpleDoubleProperty(2);
+    private final DoubleProperty lineWidth = new SimpleDoubleProperty(2);
 
-    private BooleanProperty isInteractive = new SimpleBooleanProperty(false);
+    private final BooleanProperty isInteractive = new SimpleBooleanProperty(false);
 
-    private ObservableList<ObservableNumberValue> thresholds = FXCollections.observableArrayList();
-    private Map<ObservableNumberValue, Line> vLines = new HashMap<>();
+    private final ObservableList<ObservableNumberValue> thresholds = FXCollections.observableArrayList();
+    private final Map<ObservableNumberValue, Line> vLines = new HashMap<>();
 
 
     /**
      * Note: xAxis and yAxis must be instances of NumberAxis.
      *
-     * @param chart
+     * @param chart the chart (probably a histogram or similar)
      */
-    public ChartThresholdPane(final XYChart<Number, Number> chart) {
+    public ChartXThresholdPane(final XYChart<Number, Number> chart) {
         this.chart = chart;
         this.xAxis = (NumberAxis) chart.getXAxis();
         this.yAxis = (NumberAxis) chart.getYAxis();
@@ -92,9 +93,6 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Set thresholds, which are visualized as vertical lines.
-     *
-     * @param color
-     * @param thresholds
      */
     public void setThresholds(Color color, double... thresholds) {
         clearThresholds();
@@ -105,7 +103,7 @@ public class ChartThresholdPane extends BorderPane {
     /**
      * Get a list of all thresholds.
      *
-     * @return
+     * @return the observable thresholds
      */
     public ObservableList<ObservableNumberValue> getThresholds() {
         return thresholds;
@@ -122,8 +120,8 @@ public class ChartThresholdPane extends BorderPane {
     /**
      * Set the color of a specified threshold line.
      *
-     * @param val
-     * @param color
+     * @param val the threshold value
+     * @param color the color
      */
     public void setThresholdColor(final ObservableNumberValue val, final Color color) {
         Line line = vLines.get(val);
@@ -137,8 +135,7 @@ public class ChartThresholdPane extends BorderPane {
     /**
      * Add a threshold value.
      *
-     * @param x
-     * @return
+     * @param x the initial threshold value
      */
     public ObservableNumberValue addThreshold(final double x) {
         return addThreshold(new SimpleDoubleProperty(x));
@@ -147,9 +144,9 @@ public class ChartThresholdPane extends BorderPane {
     /**
      * Add a threshold value with its display color.
      *
-     * @param x
-     * @param color
-     * @return
+     * @param x the initial threshold value
+     * @param color the color of the line to be displayed
+     * @return the observable value for the threshold
      */
     public ObservableNumberValue addThreshold(final double x, final Color color) {
         ObservableNumberValue thresholdProperty = new SimpleDoubleProperty(x);
@@ -169,8 +166,8 @@ public class ChartThresholdPane extends BorderPane {
     /**
      * Add a threshold value.
      *
-     * @param d
-     * @return
+     * @param d an observable threshold value
+     * @return the same observable value
      */
     public ObservableNumberValue addThreshold(final ObservableNumberValue d) {
         if (!thresholds.contains(d)) {
@@ -271,12 +268,12 @@ public class ChartThresholdPane extends BorderPane {
             });
 
 
-            line.setOnMouseEntered(e -> {
+            line.setOnMouseEntered(_ -> {
                 if (isInteractive())
                     line.setCursor(Cursor.H_RESIZE);
             });
 
-            line.setOnMouseExited(e -> {
+            line.setOnMouseExited(_ -> {
                 if (isInteractive())
                     line.setCursor(Cursor.DEFAULT);
             });
@@ -291,8 +288,6 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Line width property used for displaying threshold lines.
-     *
-     * @return
      */
     public DoubleProperty lineWidthProperty() {
         return lineWidth;
@@ -300,8 +295,6 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Get the threshold line width.
-     *
-     * @return
      */
     public double getLineWidth() {
         return lineWidth.get();
@@ -309,8 +302,6 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Set the threshold line width.
-     *
-     * @param width
      */
     public void setLineWidth(final double width) {
         lineWidth.set(width);
@@ -318,8 +309,6 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Property indicating whether thresholds can be adjusted interactively.
-     *
-     * @return
      */
     public BooleanProperty isInteractiveProperty() {
         return isInteractive;
@@ -327,8 +316,7 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Returns the value of {@link #isInteractiveProperty()}.
-     *
-     * @return
+     * @return the interactivity state
      */
     public boolean isInteractive() {
         return isInteractive.get();
@@ -336,8 +324,6 @@ public class ChartThresholdPane extends BorderPane {
 
     /**
      * Sets the value of {@link #isInteractiveProperty()}.
-     *
-     * @param isInteractive
      */
     public void setIsInteractive(final boolean isInteractive) {
         this.isInteractive.set(isInteractive);
