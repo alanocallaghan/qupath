@@ -331,7 +331,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
             redraw();
         }
         redrawNeeded = false;
-        Region r;
     }
 
     @Override
