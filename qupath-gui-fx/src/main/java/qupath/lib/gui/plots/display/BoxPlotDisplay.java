@@ -4,7 +4,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import javafx.beans.InvalidationListener;
+import javafx.beans.Observable;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
@@ -105,7 +110,9 @@ public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
 
         initProperties();
 
+        baseClassOnly.addListener(_ -> requestRefresh());
         comboNameY.getSelectionModel().selectedItemProperty().addListener(_ -> requestRefresh());
+        comboPathClasses.getItems().addListener((InvalidationListener) _ -> requestRefresh());
         comboPathClasses.getCheckModel().getCheckedItems().addListener((ListChangeListener<PathClass>) _ -> requestRefresh());
         FXUtils.installSelectAllOrNoneMenu(comboPathClasses);
 
@@ -162,8 +169,16 @@ public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
             var items = model.getItems();
             var classes = new HashSet<>(comboPathClasses.getCheckModel().getCheckedItems());
             // only apply filter if one or more classes (including null class) are actually selected
-            Function<PathClass,Boolean> filter = classes.isEmpty() ?  _ -> true: classes::contains;
-            setDataFromTable(items, model, filter, y);
+            Predicate<T> objectFilter;
+            Function<T, PathClass> classExtractor;
+            if (baseClassOnly.get()) {
+                objectFilter = po -> classes.stream().anyMatch(pc -> po.getPathClass().isDerivedFrom(pc));
+                classExtractor = po -> po.getPathClass().getBaseClass();
+            } else {
+                objectFilter = po -> classes.contains(po.getPathClass());
+                classExtractor = PathObject::getPathClass;
+            };
+            setDataFromTable(items, model, objectFilter, classExtractor, y);
         }
     }
 
@@ -192,7 +207,7 @@ public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
     /**
      * Set the data to display in the plot from a table model.
      * <p>
-     * This calls {@link setData(Collection, Function, Function)} in addition to setting the x and y labels.
+     * This calls {@link setData(Collection, Predicate, Function, Function)} in addition to setting the x and y labels.
      *
      * @param pathObjects the objects to display
      * @param model the table model containing the measurements
@@ -201,40 +216,52 @@ public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
     private void setDataFromTable(
             Collection<T> pathObjects,
             PathTableData<T> model,
-            Function<PathClass, Boolean> classFilter,
+            Predicate<T> objectFilter,
+            Function<T, PathClass> classExtractor,
             String yMeasurement) {
 
         setData(pathObjects,
-                classFilter,
+                objectFilter,
+                classExtractor,
                 p -> model.getNumericValue(p, yMeasurement));
         boxplot.getYAxis().setLabel(yMeasurement);
     }
 
     /**
      * Set the data to display in the plot.
-     * @param pathObjects the objects to display
+     * @param objects the objects to display
      * @param yFun a function to extract the y value to plot
      */
     private void setData(
-            Collection<T> pathObjects,
-            Function<PathClass, Boolean> classFilter,
+            Collection<T> objects,
+            Predicate<T> objectFilter,
+            Function<T, PathClass> classExtractor,
             Function<T, Number> yFun) {
 
-        // todo if the filter is null or something, then plot everything in one series (unlabelled)
+        // todo if only base classes...?
         // find the represented classes & sort them
-        var newData = pathObjects
+
+        // input: list of objects
+        // filter list to contain
+        // extract pathclass or base class
+        // output: list of series for each pathclass
+
+        var newData = objects
                 .stream()
-                .map(PathObject::getPathClass)
-                .filter(classFilter::apply)
+                .filter(objectFilter)
+                .map(classExtractor)
                 .distinct()
                 .sorted(Comparator.nullsFirst(PathClass::compareTo))
                 .map(pc -> {
                     // create a series for each class so they appear nicely in the legend
+                    PathClass finalPc = pc == null ? PathClass.NULL_CLASS : pc;
                     return new XYChart.Series<>(
-                            pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
-                            FXCollections.observableArrayList(pathObjects.stream()
-                                    .filter(po -> po.getPathClass() == pc)
-                                    .map(po -> new XYChart.Data<>(pc.toString(), yFun.apply(po), po))
+                            finalPc.toString(),
+                            FXCollections.observableArrayList(objects.stream()
+                                    .filter(po -> classExtractor.apply(po).equals(finalPc))
+                                    .map(po -> new XYChart.Data<>(
+                                            finalPc.toString(),
+                                            yFun.apply(po), po))
                                     .toList())
                     );
                 })
@@ -286,6 +313,7 @@ public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
 
     private void updatePathClasses(PathTableData<T> newValue) {
         var objects = newValue.getItems();
+        var previousChecks = new ArrayList<>(comboPathClasses.getCheckModel().getCheckedItems());
         Function<PathObject, PathClass> collector = PathObject::getPathClass;
         if (baseClassOnly.get()) {
             collector = (po) -> po.getPathClass().getBaseClass();
@@ -297,6 +325,19 @@ public class BoxPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
         }
         comboPathClasses.getItems().setAll(classes);
         comboPathClasses.getCheckModel().checkAll();
+        // todo deal with checkcombobox shenanigans
+//        if (previousChecks.isEmpty() || comboPathClasses.getItems().stream().anyMatch(previousChecks::contains)) {
+//            // if there were no previous checks, or if none of the previous checks are present, give me everything
+//            comboPathClasses.getCheckModel().checkAll();
+//        } else {
+//            // otherwise, try restoring them...
+//            comboPathClasses.getCheckModel().clearChecks();
+//            for (var pathClass : previousChecks) {
+//                if (comboPathClasses.getItems().contains(pathClass)) {
+//                    comboPathClasses.getCheckModel().check(pathClass);
+//                }
+//            }
+//        }
     }
 
 

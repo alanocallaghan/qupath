@@ -119,6 +119,10 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
     // Record of number of points that have been set
     private final IntegerProperty totalPoints = new SimpleIntegerProperty();
 
+    /**
+     * Create a scatter plot display with the specified model
+     * @param model the data model
+     */
     public ScatterPlotDisplay(PathTableData<T> model) {
         this();
         this.model.set(model);
@@ -135,7 +139,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
                 .useCanvas(true)
                 .viewer(QuPathGUI.getInstance().getViewer())
                 .build();
-        scatter.setMarkerSize(pointRadius.get() * 2); // todo radius vs size
+        scatter.setMarkerRadius(pointRadius.get() * 2); // todo radius vs size
         scatter.setMarkerOpacity(pointOpacity.get());
 
 
@@ -289,7 +293,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
 
     private void initProperties() {
         pointOpacity.addListener((_, _, n) -> scatter.setMarkerOpacity(n));
-        pointRadius.addListener((_, _, n) -> scatter.setMarkerSize(n * 2));
+        pointRadius.addListener((_, _, n) -> scatter.setMarkerRadius(n * 2));
 
         scatter.verticalGridLinesVisibleProperty().bindBidirectional(showGrid);
         scatter.horizontalGridLinesVisibleProperty().bindBidirectional(showGrid);
@@ -301,7 +305,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
         scatter.autorangeToFullDataProperty().bindBidirectional(autorangeFullData);
 
         maxPoints.addListener((_, _, n) -> scatter.setMaxPoints(n.intValue()));
-        seed.addListener((_, _, n) -> scatter.setRngSeed(n.intValue()));
+        seed.addListener((_, _, n) -> scatter.setRandomSeed(n.intValue()));
     }
 
     private void handleModelChange(ObservableValue<? extends PathTableData<?>> observable,
@@ -350,8 +354,8 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
 
     private Pane createMainOptionsPane() {
         return new VBox(
-                createDisplayOptionsPane(),
-                createSamplingOptionPane()
+                createDisplayOptionsPane()
+//                , createSamplingOptionPane()
         );
     }
 

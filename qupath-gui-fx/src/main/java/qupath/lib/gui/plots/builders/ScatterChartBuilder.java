@@ -279,7 +279,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
                     .collect(Collectors.toMap(PathClass::toString, ColorToolsFX::getPathClassColor));
             var chart = new CanvasScatterChart<>(xAxis, yAxis, cmap);
             chart.setMarkerOpacity(this.markerOpacity);
-            chart.setMarkerSize(this.markerSize);
+            chart.setMarkerRadius(this.markerSize);
             return chart;
         } else {
             return new ScatterChart<>(xAxis, yAxis);

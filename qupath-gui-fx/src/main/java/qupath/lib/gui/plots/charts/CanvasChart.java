@@ -1,8 +1,10 @@
 package qupath.lib.gui.plots.charts;
 
+import java.util.List;
 import java.util.Optional;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.chart.XYChart;
+import javafx.scene.paint.Color;
 
 /**
  * A canvas-based chart
@@ -26,4 +28,17 @@ public interface CanvasChart<X, Y> {
      */
     Optional<XYChart.Data<X, Y>> findDataPoint(double x, double y, double tolerance);
 
+    // my best attempt at non-terrible non-clashing default colors. Could instead use something from ColorBrewer
+
+    /**
+     * A default color palette when colors aren't supplied
+     * @return An immutable list of pre-defined colors.
+     */
+    default List<Color> getDefaultColors() {
+        return List.of(
+            Color.FIREBRICK, Color.DODGERBLUE, Color.FORESTGREEN,
+            Color.GOLDENROD, Color.DARKMAGENTA, Color.TEAL,
+            Color.DEEPPINK, Color.CHOCOLATE, Color.SLATEBLUE,
+            Color.DARKSLATEGRAY);
+    }
 }

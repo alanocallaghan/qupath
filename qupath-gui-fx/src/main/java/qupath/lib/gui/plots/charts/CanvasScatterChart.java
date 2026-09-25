@@ -2,20 +2,19 @@ package qupath.lib.gui.plots.charts;
 
 import com.sun.javafx.charts.Legend;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.function.Function;
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.Scene;
@@ -24,7 +23,6 @@ import javafx.scene.chart.Axis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.ValueAxis;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.stage.Window;
@@ -36,18 +34,10 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.index.quadtree.Quadtree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.objects.PathObject;
-import qupath.lib.objects.classes.PathClass;
 
 public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements CanvasChart<X,Y> {
     private static final Logger logger = LoggerFactory.getLogger(CanvasScatterChart.class);
 
-    // my best attempt at non-terrible non-clashing default colors. Could instead use something from ColorBrewer
-    private static final List<Color> DEFAULT_COLORS = List.of(
-            Color.FIREBRICK, Color.DODGERBLUE, Color.FORESTGREEN,
-            Color.GOLDENROD, Color.DARKMAGENTA, Color.TEAL,
-            Color.DEEPPINK, Color.CHOCOLATE, Color.SLATEBLUE,
-            Color.DARKSLATEGRAY);
     private final Map<String, Color> colorMap = new HashMap<>();
     private final GeometryFactory gf;
     private final Quadtree tree;
@@ -60,65 +50,15 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     // Shuffled objects - this is the main list we use, in preference to allData
     private final ObservableList<Data<X,Y>> shuffledData = FXCollections.observableArrayList();
 
-
-    private final DoubleProperty markerSize = new SimpleDoubleProperty(2);
+    private final DoubleProperty markerRadius = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
 
     // todo implement subsampling
     private final BooleanProperty autorangeToFullData = new SimpleBooleanProperty(true);
-    private final DoubleProperty maxPoints = new SimpleDoubleProperty(1);
-    private final Random random = new Random(123);
+    private final IntegerProperty maxPoints = new SimpleIntegerProperty(1);
+    private final IntegerProperty randomSeed = new SimpleIntegerProperty(123);
 
-    /**
-     * The size of markers on this chart
-     * @return the property corresponding to marker size
-     */
-    public DoubleProperty markerSizeProperty() {
-        return markerSize;
-    }
-
-    public void setMarkerSize(double value) {
-        if (value <= 0 || !Double.isFinite(value)) return;
-        this.markerSize.set(value);
-    }
-
-    public double getMarkerSize() {
-        return markerSize.get();
-    }
-
-    /**
-     * The opacity of markers in this plot
-     * @return the property corresponding to marker opacity
-     */
-    public DoubleProperty markerOpacityProperty() {
-        return markerOpacity;
-    }
-
-    public void setMarkerOpacity(double value) {
-        if (value <= 0 || value > 1 || !Double.isFinite(value)) return;
-        this.markerOpacity.set(value);
-    }
-
-    public double getMarkerOpacity() {
-        return markerOpacity.get();
-    }
-
-    // todo finish getters/setters + jdocs
-    public BooleanProperty autorangeToFullDataProperty() {
-        logger.warn("Currently autorangeToFullData does nothing on CanvasScatterChart.");
-        return this.autorangeToFullData;
-    }
-
-    public void setMaxPoints(double value) {
-        logger.warn("Currently maxPoints does nothing on CanvasScatterChart.");
-        this.maxPoints.set(value);
-    }
-
-    public void setRngSeed(int value) {
-        logger.warn("Currently RngSeed does nothing on CanvasScatterChart.");
-        this.random.setSeed(value);
-    }
-
+    private final Random random = new Random(randomSeed.get());
 
     /**
      * Construct a CanvasScatterChart with the two axes and the defined color map.
@@ -140,9 +80,29 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         this.colorMap.putAll(colorMap);
         this.tree = new Quadtree();
         this.gf = new GeometryFactory();
+        initProperties();
+    }
+
+    private void initProperties() {
         // unsure if this is idiomatic
         markerOpacity.subscribe(this::redraw);
-        markerSize.subscribe(this::redraw);
+        markerOpacity.addListener((v, o, n) -> {
+            if (n.doubleValue() <= 0 || n.doubleValue() > 1 || !Double.isFinite(n.doubleValue())) markerOpacity.set(o.doubleValue());
+        });
+        markerRadius.subscribe(this::redraw);
+        markerRadius.addListener((v, o, n) -> {
+            if (n.doubleValue() <= 0 || !Double.isFinite(n.doubleValue())) markerRadius.set(o.doubleValue());
+        });
+        randomSeed.addListener(_ -> {
+            logger.warn("randomSeed currently does nothing in CanvasScatterChart");
+        });
+        maxPoints.addListener(_ -> {
+            logger.warn("maxPoints currently does nothing in CanvasScatterChart");
+        });
+        autorangeToFullData.addListener(_ -> {
+            logger.warn("autorangeToFullData currently does nothing in CanvasScatterChart");
+        });
+
         sceneProperty().flatMap(Scene::windowProperty).flatMap(Window::showingProperty).subscribe(n -> {
             if (Boolean.TRUE.equals(n))
                 timer.start();
@@ -150,7 +110,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
                 timer.stop();;
         });
     }
-
 
     @Override
     public Optional<Data<X,Y>> findDataPoint(double x, double y, double tolerance) {
@@ -181,7 +140,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
         Data<X,Y> closestPoint = null;
         double minDistance = Double.MAX_VALUE;
-        double maxDistance = markerSize.get() / 2;
+        double maxDistance = getMarkerRadius();
         // these are actually the xy mouse coords
         Coordinate clickCoord = new Coordinate(x, y);
         for (Data<X,Y> candidate : candidates) {
@@ -199,6 +158,130 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         return Optional.ofNullable(closestPoint);
     }
 
+    /**
+     * The radius of markers on this chart
+     * @return the property corresponding to marker radius
+     */
+    public DoubleProperty markerRadiusProperty() {
+        return markerRadius;
+    }
+
+    /**
+     * Get the current marker radius
+     * @return the marker radius
+     */
+    public double getMarkerRadius() {
+        return markerRadius.get();
+    }
+
+    /**
+     * Set the marker size
+     * @param value the new value
+     */
+    public void setMarkerRadius(double value) {
+        this.markerRadius.set(value);
+    }
+
+    /**
+     * The opacity of markers in this plot
+     * @return the property corresponding to marker opacity
+     */
+    public DoubleProperty markerOpacityProperty() {
+        return markerOpacity;
+    }
+
+    /**
+     * Get the current marker opacity
+     * @return the marker opacity in [0, 1)
+     */
+    public double getMarkerOpacity() {
+        return markerOpacity.get();
+    }
+
+    /**
+     * Set the opacity used to draw markers
+     * @param value the new value in [0, 1)
+     */
+    public void setMarkerOpacity(double value) {
+        this.markerOpacity.set(value);
+    }
+
+    /**
+     * Whether the plot autoranges to the full data, or only the visible data
+     * @return the observable property
+     */
+    public BooleanProperty autorangeToFullDataProperty() {
+        return this.autorangeToFullData;
+    }
+
+    /**
+     * Get whether the plot autoranges to the full data, or only the visible data
+     * @return the current value
+     */
+    public boolean getAutorangeToFull() {
+        return this.autorangeToFullData.get();
+    }
+
+    /**
+     * Control whether the plot autoranges to the full data, or only the visible data
+     * @param value the new value
+     */
+    public void setAutorangeToFullData(boolean value) {
+        this.autorangeToFullData.set(value);
+    }
+
+    /**
+     * Get the observable property for the maximum number of points displayed
+     * @return the property
+     */
+    public IntegerProperty maxPointsProperty() {
+        return maxPoints;
+    }
+
+    /**
+     * Get the current maximum number of points displayed
+     * @return the current value
+     */
+    public double getMaxPoints() {
+        return maxPoints.get();
+    }
+
+    /**
+     * Set the current maximum points displayed
+     * @param value the new value
+     */
+    public void setMaxPoints(int value) {
+        this.maxPoints.set(value);
+    }
+
+    /**
+     * The random seed property
+     * @return the property
+     */
+    public IntegerProperty randomSeedProperty() {
+        return randomSeed;
+    }
+
+    /**
+     * Set the random seed
+     * @return the current seed
+     */
+    public int getRandomSeed() {
+        return randomSeed.get();
+    }
+
+    /**
+     * Set the random seed
+     * @param value the new value
+     */
+    public void setRandomSeed(int value) {
+        this.random.setSeed(value);
+    }
+
+    @Override
+    public Canvas getCanvas() {
+        return canvas;
+    }
 
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {
@@ -271,15 +354,15 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
             }
         }
         Collections.shuffle(allPoints);
-        double size = getMarkerSize();
+        double rad = getMarkerRadius();
         for (var pair: allPoints) {
             var color = getColor(pair.getKey());
             context.setFill(color);
             // fillOval uses bounding box coords
             context.fillOval(
-                    getXAxis().getDisplayPosition(pair.getValue().getXValue()) - (size / 2),
-                    getYAxis().getDisplayPosition(pair.getValue().getYValue()) - (size / 2),
-                    size, size);
+                    getXAxis().getDisplayPosition(pair.getValue().getXValue()) - rad,
+                    getYAxis().getDisplayPosition(pair.getValue().getYValue()) - rad,
+                    rad * 2, rad * 2);
 
         }
 
@@ -313,9 +396,8 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     }
 
     private Color getNextColor() {
-        return DEFAULT_COLORS.get(colorIdx++);
+        return getDefaultColors().get(colorIdx++);
     }
-
 
     private final AnimationTimer timer = new AnimationTimer() {
 
@@ -332,12 +414,5 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         }
         redrawNeeded = false;
     }
-
-    @Override
-    public Canvas getCanvas() {
-        return canvas;
-    }
-
-
 
 }
