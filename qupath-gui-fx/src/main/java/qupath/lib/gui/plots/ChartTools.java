@@ -44,6 +44,7 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.common.ColorTools;
 import qupath.lib.gui.localization.QuPathResources;
 
 import java.util.HashMap;
@@ -53,6 +54,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.function.Function;
+import qupath.lib.gui.tools.ColorToolsFX;
 
 /**
  * Collection of static methods to help when working with JavaFX charts, 
@@ -293,7 +295,10 @@ public class ChartTools {
 			
 			// Keep a reference to previous data so we can remove it later
 			var previousData = new LinkedHashSet<>(chart.getData());
-			
+
+			// counter for CSS variable later
+			int classCount = 1;
+
 			// Add each data point
 			for (Entry<T, ? extends Number> entry : counts.entrySet()) {
 				
@@ -319,12 +324,11 @@ public class ChartTools {
 				String styleString = "";
 				var color = colorFun.apply(item);
 				if (color != null) {
-					String colorString =
-							String.format("rgb(%d, %d, %d)", (int)(color.getRed()*255), (int)(color.getGreen()*255), (int)(color.getBlue()*255));
-					
-					// Warning! This assumes the use of modena.css, which styles using -fx-pie-color
-					styleString = String.format("-fx-pie-color: %s", colorString);
-					datum.getNode().setStyle(styleString);
+					int intColor = ColorToolsFX.getRGB(color);
+						chart.setStyle(chart.getStyle() + " CHART_COLOR_" + (classCount++) + ": " +
+							String.format("rgb(%d,%d,%d);",
+									ColorTools.red(intColor), ColorTools.green(intColor), ColorTools.blue(intColor))
+					);
 				}
 				
 				// Store the style
@@ -346,16 +350,6 @@ public class ChartTools {
 			// Remove previous data, if needed
 			if (!previousData.isEmpty()) {
 				chart.getData().removeAll(previousData);
-			}
-
-			// Try to update the style for the legend
-			for (var item : chart.lookupAll(".chart-legend-item")) {
-				if (item instanceof Labeled) {
-					var label = (Labeled)item;
-					var style = legendStyleMap.getOrDefault(label.getText(), null);
-					if (style != null)
-						label.getGraphic().setStyle(style);
-				}
 			}
 
 		}
