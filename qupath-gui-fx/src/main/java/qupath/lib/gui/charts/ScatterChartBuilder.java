@@ -1,7 +1,7 @@
-package qupath.lib.gui.charts.builders;
+package qupath.lib.gui.charts;
 
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -9,24 +9,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.gui.charts.impl.CanvasChart;
-import qupath.lib.gui.charts.impl.CanvasScatterChart;
 import qupath.lib.gui.localization.QuPathResources;
+import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.images.servers.PixelCalibration;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.classes.PathClass;
-import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Builder for creating scatter charts.
@@ -38,6 +37,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
 
     private Integer maxDatapoints;
     private Random rnd = new Random();
+    private final Map<String, Color> colorMap = new HashMap<>();
 
     ScatterChartBuilder() {
     }
@@ -71,6 +71,11 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         return this;
     }
 
+    public ScatterChartBuilder colorMap(Map<String, Color> colorMap) {
+        this.colorMap.putAll(colorMap);
+        return this;
+    }
+
     @Override
     protected String getDefaultWindowTitle() {
         return QuPathResources.getString("Charts.scatterChart");
@@ -88,22 +93,30 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
     }
 
 
+    public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, PixelCalibration cal) {
+        return centroids(pathObjects, cal, false);
+    }
+
     /**
+     * todo option to split by class
      * Plot centroids for the specified objects using a fixed pixel calibration.
      *
      * @param pathObjects the objects to plot
      * @param cal         the pixel calibration used to convert the centroids into other units
      * @return this builder
      */
-    public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, PixelCalibration cal) {
+    public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, PixelCalibration cal, boolean seriesByClass) {
         xLabel("x (" + cal.getPixelWidthUnit() + ")");
         yLabel("y (" + cal.getPixelHeightUnit() + ")");
-        return addSeries(
-                null,
-                pathObjects,
-                (PathObject p) -> PathObjectTools.getROI(p, true).getCentroidX() * cal.getPixelWidth().doubleValue(),
-                (PathObject p) -> -PathObjectTools.getROI(p, true).getCentroidY() * cal.getPixelHeight().doubleValue());
+        Function<PathObject, Number> xFun = (PathObject p) -> PathObjectTools.getROI(p, true).getCentroidX() * cal.getPixelWidth().doubleValue();
+        Function<PathObject, Number> yFun = (PathObject p) -> -PathObjectTools.getROI(p, true).getCentroidY() * cal.getPixelHeight().doubleValue();
+        if (seriesByClass) {
+            return addSeriesByClass(pathObjects, xFun, yFun);
+        } else {
+            return addSeries(null, pathObjects, xFun, yFun);
+        }
     }
+
 
     /**
      * Plot centroids for the specified objects in pixel units.
@@ -128,62 +141,109 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         return measurements(pathObjects, xMeasurement, yMeasurement, true);
     }
 
+    /**
+     * @param pathObjects
+     * @param xMeasurement
+     * @param yMeasurement
+     * @param seriesByClass
+     * @return
+     */
     public ScatterChartBuilder measurements(Collection<? extends PathObject> pathObjects, String xMeasurement, String yMeasurement, boolean seriesByClass) {
         xLabel(xMeasurement);
         yLabel(yMeasurement);
+        Function<PathObject, Number> xFun = (PathObject p) -> p.getMeasurementList().get(xMeasurement);
+        Function<PathObject, Number> yFun = (PathObject p) -> p.getMeasurementList().get(yMeasurement);
         if (seriesByClass) {
-            var pathClasses = pathObjects.stream().map(PathObject::getPathClass).distinct().toList();
-            for (var pathClass : pathClasses) {
-                addSeries(
-                        pathClass == null ? PathClass.NULL_CLASS.toString() : pathClass.toString(),
-                        pathObjects.stream().filter(po -> po.getPathClass() == pathClass).toList(),
-                        (PathObject p) -> p.getMeasurementList().get(xMeasurement),
-                        (PathObject p) -> p.getMeasurementList().get(yMeasurement)
-                );
-            }
-            return this;
+            return addSeriesByClass(pathObjects, xFun, yFun);
         } else {
-            return addSeries(
-                    null,
-                    pathObjects,
-                    (PathObject p) -> p.getMeasurementList().get(xMeasurement),
-                    (PathObject p) -> p.getMeasurementList().get(yMeasurement));
+            return addSeries(null, pathObjects, xFun, yFun);
         }
+    }
+
+    private @NonNull ScatterChartBuilder addSeriesByClass(
+            Collection<? extends PathObject> pathObjects,
+            Function<PathObject, Number> xFun,
+            Function<PathObject, Number> yFun) {
+
+        var pathClasses = pathObjects.stream().map(PathObject::getPathClass).distinct().toList();
+        for (var pathClass : pathClasses) {
+            PathClass pc = pathClass == null ? PathClass.NULL_CLASS : pathClass;
+            int intCol = pc.getColor();
+            if (pc == PathClass.NULL_CLASS) {
+                intCol = PathPrefs.colorDefaultObjectsProperty().get();
+            }
+            Color color = ColorToolsFX.getCachedColor(intCol);
+            colorMap.put(pc.toString(), color);
+            addSeries(
+                    pc.toString(),
+                    pathObjects.stream().filter(po -> po.getPathClass() == pathClass).toList(),
+                    xFun,
+                    yFun
+            );
+        }
+        return this;
     }
 
 
     /**
-     * Plot metadata values against each other
-     * @param projectImageEntries the image entries to collect the metadata from
-     * @param xMeasurement the name of the metadata value to plot on the x-axis
-     * @param yMeasurement the name of the metadata value to plot on the y-axis
+     * Create and add a scatterplot using arrays of numeric values.
+     *
+     * @param name the name of the data series (useful if multiple series will be plotted, otherwise may be null)
+     * @param x    x-values
+     * @param y    y-values
+     * @return this builder
      */
-    public ScatterChartBuilder metadata(Collection<? extends ProjectImageEntry<BufferedImage>> projectImageEntries, String xMeasurement, String yMeasurement) {
-        xLabel(xMeasurement);
-        yLabel(yMeasurement);
-        var filteredEntries = projectImageEntries.stream()
-                .filter(e -> e.getMetadata().get(xMeasurement) != null && e.getMetadata().get(yMeasurement) != null)
-                .toList();
-        BiFunction<ProjectImageEntry<BufferedImage>, String, Double> getMetadata = (it, metadata) -> {
-            String yVal = it.getMetadata().get(metadata);
-            if (yVal == null) {
-                return Double.NaN;
-            }
-            return Double.valueOf(yVal);
-        };
-        Double[] x = filteredEntries.stream()
-                .map(pie -> getMetadata.apply(pie, xMeasurement))
-                .toArray(Double[]::new);
-        Double[] y = filteredEntries.stream()
-                .map(pie -> getMetadata.apply(pie, xMeasurement))
-                .toArray(Double[]::new);
-        return addSeries(
-                Charts.XYChartBuilder.createSeries(null,
-                        x,
-                        y,
-                        filteredEntries
-                )
-        );
+    public ScatterChartBuilder addSeries(String name, double[] x, double[] y) {
+        return addSeries(name, x, y, (List<?>) null);
+    }
+
+    /**
+     * Create and add a scatterplot using collections of numeric values, with an associated custom object.
+     *
+     * @param name  the name of the data series (useful if multiple series will be plot, otherwise may be null)
+     * @param x     x-values
+     * @param y     y-values
+     * @param extra array of values to associate with each data point; should be the same length as x and y
+     * @return this builder
+     */
+    public ScatterChartBuilder addSeries(String name, double[] x, double[] y, Object[] extra) {
+        return addSeries(name, x, y, extra == null ? null : Arrays.asList(extra));
+    }
+
+    /**
+     * Create and add a scatterplot series using collections of numeric values, with an associated custom object.
+     *
+     * @param name  the name of the data series (useful if multiple series will be plot, otherwise may be null)
+     * @param x     x-values
+     * @param y     y-values
+     * @param extra list of values to associate with each data point; should be the same length as x and y
+     * @return this builder
+     */
+    public ScatterChartBuilder addSeries(String name, double[] x, double[] y, List<?> extra) {
+        return addSeries(createSeries(name, x, y, extra));
+    }
+
+    /**
+     * Create a scatterplot using collections of numeric values, with an associated custom object.
+     *
+     * @param name  the name of the data series (useful if multiple series will be plotted, otherwise may be null)
+     * @param x     x-values
+     * @param y     y-values
+     * @param extra list of values to associate with each data point; should be the same length as x and y
+     * @return a series of data
+     */
+    public static XYChart.Series<Number, Number> createSeries(String name,
+                                                              double[] x,
+                                                              double[] y,
+                                                              List<?> extra) {
+        List<XYChart.Data<Number, Number>> data = new ArrayList<>();
+        for (int i = 0; i < x.length; i++) {
+            if (extra != null && i < extra.size())
+                data.add(new XYChart.Data<>(x[i], y[i], extra.get(i)));
+            else
+                data.add(new XYChart.Data<>(x[i], y[i]));
+        }
+        return createSeries(name, data);
     }
 
     @Override
@@ -197,7 +257,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
                                 getClass().getClassLoader().getResource("css/charts/chart_base.css")).toExternalForm()
                 );
         if (chart instanceof CanvasChart<?,?>) {
-            // we know this is always a scatter chart because it's all we build; if we ever change that this case is dangerous obviously
+            // we know this is always a number,number chart because it's all we build; if we ever change that this case is dangerous obviously
             @SuppressWarnings("unchecked") CanvasChart<Number, Number> canvasChart = (CanvasChart<Number, Number>) chart;
             canvasChart.getCanvas().addEventHandler(MouseEvent.ANY, createCanvasMouseHandler(canvasChart));
         }
@@ -205,22 +265,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
 
     @Override
     protected ScatterChart<Number, Number> createNewChart(Axis<Number> xAxis, Axis<Number> yAxis) {
-
-        Map<String, Color> cmap = new HashMap<>();
-        // if the scatter chart wraps PathObjects, fetch the class colors. Otherwise, trust the defaults
-        var series = this.getSeries();
-        if (series != null && !series.isEmpty() &&
-                series.getFirst().getData() != null && series.getFirst().getData().getFirst() != null) {
-            var data = series.getFirst().getData().getFirst();
-            if (data.getExtraValue() instanceof PathObject) {
-                cmap.putAll(
-                        this.getSeries().stream()
-                                .map(XYChart.Series::getName).map(PathClass::fromString)
-                                .collect(Collectors.toMap(PathClass::toString, ColorToolsFX::getPathClassColor))
-                );
-            }
-        }
-        var chart = new CanvasScatterChart<>(xAxis, yAxis, cmap);
+        var chart = new CanvasScatterChart<>(xAxis, yAxis, colorMap);
         chart.setMarkerOpacity(this.markerOpacity);
         chart.setMarkerRadius(this.markerSize);
         return chart;
