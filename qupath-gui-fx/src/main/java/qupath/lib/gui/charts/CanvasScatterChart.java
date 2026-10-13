@@ -47,7 +47,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     private int colorIdx = 0;
     private final Canvas canvas = new Canvas();
     private boolean redrawNeeded;
-    public static final int NO_SHUFFLE_SEED = -1;
+    // todo move this back to pathobjectscatter
 
     private final Map<Series<X,Y>, Boolean> seriesVisible = new HashMap<>();
 
@@ -59,13 +59,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     private final DoubleProperty markerRadius = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
 
-    // todo implement subsampling
-    private final BooleanProperty autorangeToFullData = new SimpleBooleanProperty(true);
-    private final IntegerProperty maxPoints = new SimpleIntegerProperty(1);
     private final IntegerProperty randomSeed = new SimpleIntegerProperty(123);
-
-    private final Random random = new Random(randomSeed.get());
-
 
     /**
      * Construct a CanvasScatterChart with the two axes and the defined color map.
@@ -102,16 +96,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         markerRadius.addListener((v, o, n) -> {
             if (n.doubleValue() <= 0 || !Double.isFinite(n.doubleValue())) markerRadius.set(o.doubleValue());
         });
-        randomSeed.addListener(_ -> {
-            logger.warn("randomSeed currently does nothing in CanvasScatterChart");
-        });
-        maxPoints.addListener(_ -> {
-            logger.warn("maxPoints currently does nothing in CanvasScatterChart");
-        });
-        autorangeToFullData.addListener(_ -> {
-            logger.warn("autorangeToFullData currently does nothing in CanvasScatterChart");
-        });
-
         sceneProperty().flatMap(Scene::windowProperty).flatMap(Window::showingProperty).subscribe(n -> {
             if (Boolean.TRUE.equals(n))
                 timer.start();
@@ -227,53 +211,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         this.markerOpacity.set(value);
     }
 
-    /**
-     * Whether the plot autoranges to the full data, or only the visible data
-     * @return the observable property
-     */
-    public BooleanProperty autorangeToFullDataProperty() {
-        return this.autorangeToFullData;
-    }
-
-    /**
-     * Get whether the plot autoranges to the full data, or only the visible data
-     * @return the current value
-     */
-    public boolean getAutorangeToFull() {
-        return this.autorangeToFullData.get();
-    }
-
-    /**
-     * Control whether the plot autoranges to the full data, or only the visible data
-     * @param value the new value
-     */
-    public void setAutorangeToFullData(boolean value) {
-        this.autorangeToFullData.set(value);
-    }
-
-    /**
-     * Get the observable property for the maximum number of points displayed
-     * @return the property
-     */
-    public IntegerProperty maxPointsProperty() {
-        return maxPoints;
-    }
-
-    /**
-     * Get the current maximum number of points displayed
-     * @return the current value
-     */
-    public double getMaxPoints() {
-        return maxPoints.get();
-    }
-
-    /**
-     * Set the current maximum points displayed
-     * @param value the new value
-     */
-    public void setMaxPoints(int value) {
-        this.maxPoints.set(value);
-    }
 
     /**
      * The random seed property
@@ -289,14 +226,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
      */
     public int getRandomSeed() {
         return randomSeed.get();
-    }
-
-    /**
-     * Set the random seed
-     * @param value the new value
-     */
-    public void setRandomSeed(int value) {
-        this.random.setSeed(value);
     }
 
     @Override
@@ -351,17 +280,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     @Override
     protected void layoutPlotChildren() {
         redraw();
-    }
-
-    private void shuffleData() {
-        var seed = randomSeed.get();
-        if (seed == NO_SHUFFLE_SEED) {
-            shuffledData.setAll(allData);
-        } else {
-            var toShuffle = new ArrayList<>(allData);
-            Collections.shuffle(toShuffle, new Random(seed));
-            shuffledData.setAll(toShuffle);
-        }
     }
 
     private void redraw() {

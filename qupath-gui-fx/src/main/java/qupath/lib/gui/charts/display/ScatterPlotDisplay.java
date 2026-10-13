@@ -44,8 +44,8 @@ import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
-import qupath.lib.gui.charts.builders.Charts;
-import qupath.lib.gui.charts.impl.CanvasScatterChart;
+import qupath.lib.gui.charts.Charts;
+import qupath.lib.gui.charts.CanvasScatterChart;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.objects.PathObject;
 
@@ -100,6 +100,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
     private final SearchableComboBox<String> comboNameX = new SearchableComboBox<>();
     private final SearchableComboBox<String> comboNameY = new SearchableComboBox<>();
     private final BorderPane pane = new BorderPane();
+    // todo should be pathobjectscatter
     private final CanvasScatterChart<Number, Number> scatter;
 //    private final PathObjectScatterChart scatter;
 
@@ -283,10 +284,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
         scatter.getYAxis().tickLabelsVisibleProperty().bindBidirectional(showAxes);
 
         scatter.legendVisibleProperty().bindBidirectional(showLegend);
-        scatter.autorangeToFullDataProperty().bindBidirectional(autorangeFullData);
 
-        maxPoints.addListener((_, _, n) -> scatter.setMaxPoints(n.intValue()));
-        seed.addListener((_, _, n) -> scatter.setRandomSeed(n.intValue()));
     }
 
     private void handleModelChange(ObservableValue<? extends PathTableData<?>> observable,
