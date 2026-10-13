@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import qupath.fx.utils.FXUtils;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.charts.PathObjectScatterChart;
 import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
 import qupath.lib.gui.charts.Charts;
@@ -56,7 +57,7 @@ import qupath.lib.objects.classes.PathClass;
 /**
  * A wrapper around {@link CanvasScatterChart} for displaying data about PathObject measurements.
  */
-public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> {
+public class ScatterPlotDisplay implements PlotDisplay<PathObject> {
 
     private static final Logger logger = LoggerFactory.getLogger(ScatterPlotDisplay.class);
 
@@ -96,13 +97,11 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
 
     private boolean isUpdating = false;
 
-    private final ObjectProperty<PathTableData<T>> model = new SimpleObjectProperty<>();
+    private final ObjectProperty<PathTableData<PathObject>> model = new SimpleObjectProperty<>();
     private final SearchableComboBox<String> comboNameX = new SearchableComboBox<>();
     private final SearchableComboBox<String> comboNameY = new SearchableComboBox<>();
     private final BorderPane pane = new BorderPane();
-    // todo should be pathobjectscatter
-    private final CanvasScatterChart<Number, Number> scatter;
-//    private final PathObjectScatterChart scatter;
+    private final PathObjectScatterChart scatter;
 
     // .asObject() required so we can bind to a spinner (and can't call inline or we'll be garbage-collected)
     private final ObjectProperty<Double> pointRadius = createWeakBoundProperty(PROP_POINT_RADIUS).asObject();
@@ -123,7 +122,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
      * Create a scatter plot display with the specified model
      * @param model the data model
      */
-    public ScatterPlotDisplay(PathTableData<T> model) {
+    public ScatterPlotDisplay(PathTableData<PathObject> model) {
         this();
         this.model.set(model);
     }
@@ -135,9 +134,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
         this.model.addListener(this::handleModelChange);
         BorderPane panelMain = new BorderPane();
 
-        scatter = (CanvasScatterChart<Number, Number>) Charts.scatterChart()
-                .viewer(QuPathGUI.getInstance().getViewer())
-                .build();
+        scatter = new PathObjectScatterChart(QuPathGUI.getInstance().getViewer());
         scatter.setAnimated(false);
         scatter.setMarkerRadius(pointRadius.get() * 2); // todo radius vs size
         scatter.setMarkerOpacity(pointOpacity.get());
@@ -182,17 +179,17 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
     }
 
     @Override
-    public void setModel(PathTableData<T> model) {
+    public void setModel(PathTableData<PathObject> model) {
         this.model.set(model);
     }
 
     @Override
-    public PathTableData<T> getModel() {
+    public PathTableData<PathObject> getModel() {
         return this.model.get();
     }
 
     @Override
-    public ObjectProperty<PathTableData<T>> modelProperty() {
+    public ObjectProperty<PathTableData<PathObject>> modelProperty() {
         return model;
     }
 
@@ -206,7 +203,7 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
     public void requestReplot() {
         var model = this.model.get();
         if (model == null || isUpdating) {
-            setScatterData(Collections.emptyList(), _ -> Double.NaN, _ -> Double.NaN);
+            scatter.setData(Collections.emptyList(), _ -> Double.NaN, _ -> Double.NaN);
             return;
         }
         // Awkward - but SearchableComboBox tends to set values temporarily to null
@@ -214,63 +211,9 @@ public class ScatterPlotDisplay<T extends PathObject> implements PlotDisplay<T> 
         var y = comboNameY.getValue();
         if (x != null && y != null) {
             var items = model.getItems();
-            setDataFromTable(items, model, x, y);
+            scatter.setDataFromTable(items, model, x, y);
             totalPoints.set(items.size());
         }
-    }
-
-    /**
-     * Set the data to display in the plot from a table model.
-     * <p>
-     * This calls {@link setScatterData(Collection, Function, Function)} in addition to setting the x and y labels.
-     *
-     * @param pathObjects the objects to display
-     * @param model the table model containing the measurements
-     * @param xMeasurement the column to use for x values
-     * @param yMeasurement the column to use for y values
-     */
-    public void setDataFromTable(
-            Collection<T> pathObjects,
-            PathTableData<T> model,
-            String xMeasurement, String yMeasurement) {
-
-        setScatterData(pathObjects,
-                    p -> model.getNumericValue(p, xMeasurement),
-                    p -> model.getNumericValue(p, yMeasurement));
-        scatter.getXAxis().setLabel(xMeasurement);
-        scatter.getYAxis().setLabel(yMeasurement);
-    }
-
-    // todo consider making this generic for different chart types
-    /**
-     * Set the data to display in the plot.
-     * @param pathObjects the objects to display
-     * @param xFun a function to extract the x value to plot
-     * @param yFun a function to extract the y value to plot
-     */
-    private void setScatterData(Collection<T> pathObjects,
-                                Function<T, Number> xFun,
-                                Function<T, Number> yFun) {
-
-        // Find the represented classes & sort them
-        var newData = pathObjects
-                .stream()
-                .map(PathObject::getPathClass)
-                .distinct()
-                .sorted(Comparator.nullsFirst(PathClass::compareTo))
-                .map(pc -> {
-                    // create a series for each class so they appear nicely in the legend
-                    return new XYChart.Series<>(
-                            pc == null ? PathClass.NULL_CLASS.toString() : pc.toString(),
-                            FXCollections.observableArrayList(pathObjects.stream()
-                                    .filter(po -> po.getPathClass() == pc)
-                                    .map(po -> new XYChart.Data<>(xFun.apply(po), yFun.apply(po), po))
-                                    .toList())
-                    );
-                })
-                .toList();
-
-        scatter.getData().setAll(newData);
     }
 
     private void initProperties() {

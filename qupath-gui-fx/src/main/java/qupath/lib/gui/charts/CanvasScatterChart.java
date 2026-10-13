@@ -51,11 +51,6 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
     private final Map<Series<X,Y>, Boolean> seriesVisible = new HashMap<>();
 
-    // List of all objects to display - we retain this only so that we can shuffle reproducibly if the seed changes
-    private final ObservableList<Pair<String, Data<X,Y>>> allData = FXCollections.observableArrayList();
-    // Shuffled objects - this is the main list we use, in preference to allData
-    private final ObservableList<Pair<String, Data<X,Y>>> shuffledData = FXCollections.observableArrayList();
-
     private final DoubleProperty markerRadius = new SimpleDoubleProperty(2);
     private final DoubleProperty markerOpacity = new SimpleDoubleProperty(1);
 
@@ -236,15 +231,10 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     @Override
     protected void dataItemAdded(Series<X, Y> series, int itemIndex, Data<X, Y> item) {
         tree.insert(createEnvelope(item), item);
-        allData.add(new Pair<>(series.getName(), item));
     }
 
     @Override
     protected void dataItemRemoved(Data<X, Y> item, Series<X, Y> series) {
-        allData.stream()
-                .filter(p -> p.getValue().equals(item))
-                .findFirst()
-                .ifPresent(allData::remove);
         tree.remove(createEnvelope(item), item);
         removeDataItemFromDisplay(series, item);
     }
@@ -269,7 +259,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
     private Envelope createEnvelope(Data<X, Y> item) {
         // cannot create tree with XY coords because axes may not be initiated
-        // also keeping it on data scale means it does not need to be update
+        // also keeping it on data scale means it does not need to be updated
         Point p = gf.createPoint(new Coordinate(
                 (Double) item.getXValue(),
                 (Double) item.getYValue())
@@ -288,7 +278,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         context.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
         List<Pair<String, Data<X,Y>>> allPoints = new ArrayList<>();
         for (Series<X,Y> series : getData()) {
-            if (seriesVisible.computeIfAbsent(series, x -> true)) {
+            if (seriesVisible.computeIfAbsent(series, _ -> true)) {
                 for (Data<X, Y> elem: series.getData()) {
                     var p = new Pair<>(series.getName(), elem);
                     allPoints.add(p);
@@ -299,7 +289,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         Collections.shuffle(allPoints, random);
         double rad = getMarkerRadius();
         for (var pair: allPoints) {
-            var color = getColor(pair.getKey());
+            var color = getColor(pair.getKey(), pair.getValue());
             context.setFill(color);
             // fillOval uses bounding box coords
             context.fillOval(
@@ -313,42 +303,34 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
     @Override
     protected void updateLegend() {
-        Node legend = createLegend();
-        setLegend(legend);
-    }
-
-    Node createLegend() {
         List<Node> legendList = new ArrayList<>();
-        HBox box = new HBox(); // todo probably need to handle different orientations...
-        box.setAlignment(Pos.CENTER);
-        box.setSpacing(5);
+        HBox container = new HBox(); // todo probably need to handle different orientations...
+        container.setAlignment(Pos.CENTER);
+        container.setSpacing(5);
         if (getData() != null) {
             for (Series<X,Y> series : getData()) {
-                legendList.add(createLegendItem(series));
+                HBox box = new HBox();
+                box.setAlignment(Pos.CENTER);
+                box.setSpacing(5);
+                Label label = new Label(series.getName());
+                Node symbol = new Circle(5, getColor(series.getName(), null));
+                symbol.setOnMouseClicked(_ -> {
+                    boolean nowVisible = seriesVisible.computeIfAbsent(series, s -> true);
+                    seriesVisible.put(series, !nowVisible);
+                    symbol.setOpacity(!nowVisible ? 1 : 0.2);
+                    redraw();
+                });
+                symbol.getStyleClass().setAll("chart-legend-item-symbol");
+                box.getChildren().addAll(symbol, label);
+                legendList.add(box);
             }
         }
-        box.getChildren().setAll(legendList);
-        return box;
+        container.getChildren().setAll(legendList);
+        setLegend(container);
     }
 
-    Node createLegendItem(Series<X,Y> series) {
-        HBox box = new HBox();
-        box.setAlignment(Pos.CENTER);
-        box.setSpacing(5);
-        Label label = new Label(series.getName());
-        Node symbol = new Circle(5, getColor(series.getName()));
-        symbol.setOnMouseClicked(_ -> {
-            boolean nowVisible = seriesVisible.computeIfAbsent(series, s -> true);
-            seriesVisible.put(series, !nowVisible);
-            symbol.setOpacity(!nowVisible ? 1 : 0.2);
-            redraw();
-        });
-        symbol.getStyleClass().setAll("chart-legend-item-symbol");
-        box.getChildren().addAll(symbol, label);
-        return box;
-    }
-
-    private Color getColor(String name) {
+    // todo signature...? Should be series and data? String and data?
+    protected Color getColor(String name, Data<X,Y> item) {
         return colorMap.computeIfAbsent(name, _ -> getNextColor());
     }
 

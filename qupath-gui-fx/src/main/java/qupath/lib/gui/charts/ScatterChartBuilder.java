@@ -282,6 +282,8 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         Charts.tryToSelectObject(pathObject, viewer, imageData, addToSelection, centerObject);
     }
 
+
+
     @Override
     protected ScatterChartBuilder getThis() {
         return this;

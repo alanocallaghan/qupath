@@ -127,7 +127,7 @@ public class Charts {
 	 * @param addToSelection if true, add to an existing selection; if false, reset any current selection
 	 * @param centerObject if true, try to center it in a viewer (if possible)
 	 */
-	static void tryToSelectObject(PathObject pathObject, QuPathViewer viewer, ImageData<?> imageData, boolean addToSelection, boolean centerObject) {
+	public static void tryToSelectObject(PathObject pathObject, QuPathViewer viewer, ImageData<?> imageData, boolean addToSelection, boolean centerObject) {
 		PathObjectHierarchy hierarchy = null;
 		if (imageData != null)
 			hierarchy = imageData.getHierarchy();
