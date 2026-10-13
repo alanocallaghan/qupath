@@ -228,6 +228,8 @@ public class ScatterPlotDisplay implements PlotDisplay<PathObject> {
 
         scatter.legendVisibleProperty().bindBidirectional(showLegend);
 
+        maxPoints.addListener((v, o, n) -> scatter.setMaxPoints(n.intValue()));
+        seed.addListener((v, o, n) -> scatter.setRngSeed(n.intValue()));
     }
 
     private void handleModelChange(ObservableValue<? extends PathTableData<?>> observable,
@@ -276,8 +278,8 @@ public class ScatterPlotDisplay implements PlotDisplay<PathObject> {
 
     private Pane createMainOptionsPane() {
         return new VBox(
-                createDisplayOptionsPane()
-//                , createSamplingOptionPane()
+                createDisplayOptionsPane(),
+                createSamplingOptionPane()
         );
     }
 
@@ -362,7 +364,6 @@ public class ScatterPlotDisplay implements PlotDisplay<PathObject> {
         return new TitledPane(QuPathResources.getString("Charts.ScatterPlotDisplay.display"), hbox);
     }
 
-    // todo unused as canvas scatter doesn't currently support subsampling
     private TitledPane createSamplingOptionPane() {
         var pane = new GridPane();
         int row = 0;
