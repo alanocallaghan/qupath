@@ -3,19 +3,19 @@ package qupath.lib.gui.charts;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import javafx.animation.AnimationTimer;
-import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -41,10 +41,8 @@ import org.slf4j.LoggerFactory;
 public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements CanvasChart<X,Y> {
     private static final Logger logger = LoggerFactory.getLogger(CanvasScatterChart.class);
 
-    private final Map<String, Color> colorMap = new HashMap<>();
     private final GeometryFactory gf;
     private final Quadtree tree;
-    private int colorIdx = 0;
     private final Canvas canvas = new Canvas();
     private boolean redrawNeeded;
 
@@ -55,24 +53,20 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
     private final IntegerProperty randomSeed = new SimpleIntegerProperty(123);
 
+    private ObjectProperty<ColorScale<?>> colorScaleObjectProperty = new SimpleObjectProperty<>(ColorScale.SERIES_NAME);
+
+    public void setColorScale(ColorScale<?> colorScale) {
+        this.colorScaleObjectProperty.set(colorScale);
+    }
+
+
     /**
      * Construct a CanvasScatterChart with the two axes and the defined color map.
      * @param xAxis the x-axis for this chart
      * @param yAxis the y-axis for this chart
      */
     public CanvasScatterChart(Axis<X> xAxis, Axis<Y> yAxis) {
-        this(xAxis, yAxis, Map.of());
-    }
-
-    /**
-     * Construct a CanvasScatterChart with the two axes and the defined color map.
-     * @param xAxis the x-axis for this chart
-     * @param yAxis the y-axis for this chart
-     * @param colorMap the mapping from series names to colors (can be empty)
-     */
-    public CanvasScatterChart(Axis<X> xAxis, Axis<Y> yAxis, Map<String, Color> colorMap) {
         super(xAxis, yAxis);
-        this.colorMap.putAll(colorMap);
         this.tree = new Quadtree();
         this.gf = new GeometryFactory();
         initProperties();
@@ -274,27 +268,19 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         var context = canvas.getGraphicsContext2D();
         context.setGlobalAlpha(markerOpacity.get());
         context.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
-        List<Pair<String, Data<X,Y>>> allPoints = new ArrayList<>();
+        double rad = getMarkerRadius();
         for (Series<X,Y> series : getData()) {
             if (seriesVisible.computeIfAbsent(series, _ -> true)) {
-                for (Data<X, Y> elem: series.getData()) {
-                    var p = new Pair<>(series.getName(), elem);
-                    allPoints.add(p);
+                for (var point : series.getData()) {
+                    var color = colorScaleObjectProperty.get().getColor(series, point);
+                    context.setFill(color);
+                    // fillOval uses bounding box coords
+                    context.fillOval(
+                            getXAxis().getDisplayPosition(point.getXValue()) - rad,
+                            getYAxis().getDisplayPosition(point.getYValue()) - rad,
+                            rad * 2, rad * 2);
                 }
             }
-        }
-        Random random = new Random(randomSeed.get());
-        Collections.shuffle(allPoints, random);
-        double rad = getMarkerRadius();
-        for (var pair: allPoints) {
-            var color = getColor(pair.getKey(), pair.getValue());
-            context.setFill(color);
-            // fillOval uses bounding box coords
-            context.fillOval(
-                    getXAxis().getDisplayPosition(pair.getValue().getXValue()) - rad,
-                    getYAxis().getDisplayPosition(pair.getValue().getYValue()) - rad,
-                    rad * 2, rad * 2);
-
         }
 
     }
@@ -305,35 +291,32 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
         HBox container = new HBox(); // todo probably need to handle different orientations...
         container.setAlignment(Pos.CENTER);
         container.setSpacing(5);
+        Set<Pair<String, Color>> categories = new HashSet<>();
         if (getData() != null) {
             for (Series<X,Y> series : getData()) {
-                HBox box = new HBox();
-                box.setAlignment(Pos.CENTER);
-                box.setSpacing(5);
-                Label label = new Label(series.getName());
-                Node symbol = new Circle(5, getColor(series.getName(), null));
-                symbol.setOnMouseClicked(_ -> {
-                    boolean nowVisible = seriesVisible.computeIfAbsent(series, s -> true);
-                    seriesVisible.put(series, !nowVisible);
-                    symbol.setOpacity(!nowVisible ? 1 : 0.2);
-                    redraw();
-                });
-                symbol.getStyleClass().setAll("chart-legend-item-symbol");
-                box.getChildren().addAll(symbol, label);
-                legendList.add(box);
+                for (var point : series.getData()) {
+                    categories.add(
+                            new Pair<>(
+                                    colorScaleObjectProperty.get().getCategoryName(series, point),
+                                    colorScaleObjectProperty.get().getColor(series, point)
+                            )
+                    );
+                }
             }
         }
+        for (var category : categories) {
+            HBox box = new HBox();
+            box.setAlignment(Pos.CENTER);
+            box.setSpacing(5);
+            Label label = new Label(category.getKey());
+            Node symbol = new Circle(5, category.getValue());
+            symbol.getStyleClass().setAll("chart-legend-item-symbol");
+            box.getChildren().addAll(symbol, label);
+            legendList.add(box);
+        }
+
         container.getChildren().setAll(legendList);
         setLegend(container);
-    }
-
-    // todo signature...? Should be series and data? String and data?
-    protected Color getColor(String name, Data<X,Y> item) {
-        return colorMap.computeIfAbsent(name, _ -> getNextColor());
-    }
-
-    private Color getNextColor() {
-        return getDefaultColors().get(colorIdx++);
     }
 
     private final AnimationTimer timer = new AnimationTimer() {
@@ -348,6 +331,7 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
     private void handlePulse() {
         if (redrawNeeded) {
             redraw();
+            updateLegend();
         }
         redrawNeeded = false;
     }

@@ -31,32 +31,20 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.event.EventHandler;
-import javafx.geometry.Pos;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
-import javafx.scene.chart.XYChart;
-import javafx.scene.control.ContentDisplay;
-import javafx.scene.control.Label;
 import javafx.scene.effect.BlurType;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Effect;
-import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.TilePane;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
-import javafx.scene.shape.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.GeneralTools;
-import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.measure.PathTableData;
 import qupath.lib.gui.prefs.PathPrefs;
-import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.objects.PathObject;
-import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.hierarchy.events.PathObjectSelectionModel;
 
@@ -154,6 +142,7 @@ public class PathObjectScatterChart extends CanvasScatterChart<Number, Number> {
                             if (!selectedObjects.isEmpty())
                                 refreshData();
                         });
+                this.setColorScale(Charts.createPathClassColorScale(hierarchy));
             } else {
                 selectionModel = null;
             }
@@ -175,8 +164,6 @@ public class PathObjectScatterChart extends CanvasScatterChart<Number, Number> {
                 });
             }
         });
-
-
 
 
         maxPoints.addListener(_ -> ensureMaxPoints());
@@ -279,17 +266,6 @@ public class PathObjectScatterChart extends CanvasScatterChart<Number, Number> {
         // circle.setVisible(x != null && y != null && Double.isFinite(x.doubleValue()) && Double.isFinite(y.doubleValue()));
     }
 
-    @Override
-    protected Color getColor(String name, Data<Number, Number> data) {
-        var pathObject = (PathObject)data.getExtraValue();
-        if  (pathObject == null) {
-            return Color.TRANSPARENT;
-        }
-        if (isSelected(pathObject)) {
-            return ColorToolsFX.getCachedColor(PathPrefs.colorSelectedObjectProperty().getValue());
-        }
-        return ColorToolsFX.getDisplayedColor(pathObject);
-    }
 
 
     /**
@@ -418,47 +394,47 @@ public class PathObjectScatterChart extends CanvasScatterChart<Number, Number> {
     }
 
 
-    @Override
-    protected void updateLegend() {
-        List<Label> legendList = new ArrayList<>();
-        for (PathClass pathClass : pathClasses) {
-            var circle = new Circle();
-            // Binding to radius & opacity doesn't work great, as we might not see the colors
-            circle.setRadius(5.0);
-            Integer rgb;
-            if (pathClass == null)
-                rgb = PathPrefs.colorDefaultObjectsProperty().get();
-            else
-                rgb = pathClass.getColor();
-            circle.setFill(ColorToolsFX.getCachedColor(rgb));
-            var item = new Label(
-                    pathClass == null ? QuPathResources.getString("Charts.PathObjectScatterChart.unclassified") : pathClass.toString(),
-                    circle
-            );
-            item.setAlignment(Pos.CENTER_LEFT);
-            item.setContentDisplay(ContentDisplay.LEFT);
-            legendList.add(item);
-        }
-        if (!selectedObjects.isEmpty()) {
-            var circle = new Circle();
-            circle.setRadius(5.0);
-            circle.setFill(ColorToolsFX.getCachedColor(PathPrefs.colorSelectedObjectProperty().getValue()));
-            var item = new Label(
-                    QuPathResources.getString("Charts.PathObjectScatterChart.selected"),
-                    circle
-            );
-            item.setAlignment(Pos.CENTER_LEFT);
-            item.setContentDisplay(ContentDisplay.LEFT);
-            legendList.add(item);
-        }
-        if (!legendList.isEmpty()) {
-            var legend = new TilePane();
-            legend.getChildren().setAll(legendList);
-            setLegend(legend);
-        } else {
-            setLegend(null);
-        }
-    }
+//    @Override
+//    protected void updateLegend() {
+//        List<Label> legendList = new ArrayList<>();
+//        for (PathClass pathClass : pathClasses) {
+//            var circle = new Circle();
+//            // Binding to radius & opacity doesn't work great, as we might not see the colors
+//            circle.setRadius(5.0);
+//            Integer rgb;
+//            if (pathClass == null)
+//                rgb = PathPrefs.colorDefaultObjectsProperty().get();
+//            else
+//                rgb = pathClass.getColor();
+//            circle.setFill(ColorToolsFX.getCachedColor(rgb));
+//            var item = new Label(
+//                    pathClass == null ? QuPathResources.getString("Charts.PathObjectScatterChart.unclassified") : pathClass.toString(),
+//                    circle
+//            );
+//            item.setAlignment(Pos.CENTER_LEFT);
+//            item.setContentDisplay(ContentDisplay.LEFT);
+//            legendList.add(item);
+//        }
+//        if (!selectedObjects.isEmpty()) {
+//            var circle = new Circle();
+//            circle.setRadius(5.0);
+//            circle.setFill(ColorToolsFX.getCachedColor(PathPrefs.colorSelectedObjectProperty().getValue()));
+//            var item = new Label(
+//                    QuPathResources.getString("Charts.PathObjectScatterChart.selected"),
+//                    circle
+//            );
+//            item.setAlignment(Pos.CENTER_LEFT);
+//            item.setContentDisplay(ContentDisplay.LEFT);
+//            legendList.add(item);
+//        }
+//        if (!legendList.isEmpty()) {
+//            var legend = new TilePane();
+//            legend.getChildren().setAll(legendList);
+//            setLegend(legend);
+//        } else {
+//            setLegend(null);
+//        }
+//    }
 
     private void shuffleData() {
         var seed = rngSeed.get();

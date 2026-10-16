@@ -26,6 +26,9 @@ import qupath.lib.images.servers.PixelCalibration;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjectTools;
 import qupath.lib.objects.classes.PathClass;
+import qupath.lib.objects.hierarchy.events.PathObjectHierarchyEvent;
+import qupath.lib.objects.hierarchy.events.PathObjectHierarchyListener;
+import qupath.lib.objects.hierarchy.events.PathObjectSelectionListener;
 
 /**
  * Builder for creating scatter charts.
@@ -33,11 +36,12 @@ import qupath.lib.objects.classes.PathClass;
 public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChartBuilder, ScatterChart<Number, Number>> {
 
     private static final Logger logger = LoggerFactory.getLogger(ScatterChartBuilder.class);
-    private static final Integer DEFAULT_MAX_DATAPOINTS = 10_000;
+    private static final Integer DEFAULT_MAX_DATAPOINTS = 1_000_000;
+    private static final ColorScale<?> DEFAULT_COLOR_SCALE = ColorScale.SERIES_NAME;
 
     private Integer maxDatapoints;
     private Random rnd = new Random();
-    private final Map<String, Color> colorMap = new HashMap<>();
+    private ColorScale<?> colorScale;
 
     ScatterChartBuilder() {
     }
@@ -59,6 +63,11 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         return this;
     }
 
+    public ScatterChartBuilder colorScale(ColorScale<?> colorScale) {
+        this.colorScale = colorScale;
+        return this;
+    }
+
     /**
      * Show all datapoints, without subsampling, even when this may cause performance issues.
      * Use with caution.
@@ -68,11 +77,6 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
      */
     public ScatterChartBuilder unlimitedDatapoints() {
         maxDatapoints = -1;
-        return this;
-    }
-
-    public ScatterChartBuilder colorMap(Map<String, Color> colorMap) {
-        this.colorMap.putAll(colorMap);
         return this;
     }
 
@@ -93,10 +97,6 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
     }
 
 
-    public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, PixelCalibration cal) {
-        return centroids(pathObjects, cal, false);
-    }
-
     /**
      * todo option to split by class
      * Plot centroids for the specified objects using a fixed pixel calibration.
@@ -105,16 +105,12 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
      * @param cal         the pixel calibration used to convert the centroids into other units
      * @return this builder
      */
-    public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, PixelCalibration cal, boolean seriesByClass) {
+    public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, PixelCalibration cal) {
         xLabel("x (" + cal.getPixelWidthUnit() + ")");
         yLabel("y (" + cal.getPixelHeightUnit() + ")");
         Function<PathObject, Number> xFun = (PathObject p) -> PathObjectTools.getROI(p, true).getCentroidX() * cal.getPixelWidth().doubleValue();
         Function<PathObject, Number> yFun = (PathObject p) -> -PathObjectTools.getROI(p, true).getCentroidY() * cal.getPixelHeight().doubleValue();
-        if (seriesByClass) {
-            return addSeriesByClass(pathObjects, xFun, yFun);
-        } else {
-            return addSeries(null, pathObjects, xFun, yFun);
-        }
+        return addSeries(null, pathObjects, xFun, yFun);
     }
 
 
@@ -131,57 +127,21 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
 
     /**
      * Plot two measurements against one another for the specified objects.
-     *
+     * todo document color scale
      * @param pathObjects  the objects to plot
      * @param xMeasurement the measurement to extract from each object's measurement list for the x location
      * @param yMeasurement the measurement to extract from each object's measurement list for the y location
      * @return this builder
      */
     public ScatterChartBuilder measurements(Collection<? extends PathObject> pathObjects, String xMeasurement, String yMeasurement) {
-        return measurements(pathObjects, xMeasurement, yMeasurement, true);
-    }
-
-    /**
-     * @param pathObjects
-     * @param xMeasurement
-     * @param yMeasurement
-     * @param seriesByClass
-     * @return
-     */
-    public ScatterChartBuilder measurements(Collection<? extends PathObject> pathObjects, String xMeasurement, String yMeasurement, boolean seriesByClass) {
         xLabel(xMeasurement);
         yLabel(yMeasurement);
         Function<PathObject, Number> xFun = (PathObject p) -> p.getMeasurementList().get(xMeasurement);
         Function<PathObject, Number> yFun = (PathObject p) -> p.getMeasurementList().get(yMeasurement);
-        if (seriesByClass) {
-            return addSeriesByClass(pathObjects, xFun, yFun);
-        } else {
-            return addSeries(null, pathObjects, xFun, yFun);
+        if (viewer != null) {
+            colorScale(Charts.createPathClassColorScale(viewer.getHierarchy()));
         }
-    }
-
-    private @NonNull ScatterChartBuilder addSeriesByClass(
-            Collection<? extends PathObject> pathObjects,
-            Function<PathObject, Number> xFun,
-            Function<PathObject, Number> yFun) {
-
-        var pathClasses = pathObjects.stream().map(PathObject::getPathClass).distinct().toList();
-        for (var pathClass : pathClasses) {
-            PathClass pc = pathClass == null ? PathClass.NULL_CLASS : pathClass;
-            int intCol = pc.getColor();
-            if (pc == PathClass.NULL_CLASS) {
-                intCol = PathPrefs.colorDefaultObjectsProperty().get();
-            }
-            Color color = ColorToolsFX.getCachedColor(intCol);
-            colorMap.put(pc.toString(), color);
-            addSeries(
-                    pc.toString(),
-                    pathObjects.stream().filter(po -> po.getPathClass() == pathClass).toList(),
-                    xFun,
-                    yFun
-            );
-        }
-        return this;
+        return addSeries(null, pathObjects, xFun, yFun);
     }
 
 
@@ -265,7 +225,18 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
 
     @Override
     protected ScatterChart<Number, Number> createNewChart(Axis<Number> xAxis, Axis<Number> yAxis) {
-        var chart = new CanvasScatterChart<>(xAxis, yAxis, colorMap);
+        var chart = new CanvasScatterChart<>(xAxis, yAxis);
+        chart.setColorScale(this.colorScale);
+        if (viewer != null && viewer.getHierarchy() != null) {
+            viewer.getHierarchy().getSelectionModel().addPathObjectSelectionListener((_, _, _) -> {
+                chart.layoutPlotChildren();
+                chart.updateLegend();
+            });
+            viewer.getHierarchy().addListener(_ -> {
+                chart.layoutPlotChildren();
+                chart.updateLegend();
+            });
+        }
         chart.setMarkerOpacity(this.markerOpacity);
         chart.setMarkerRadius(this.markerSize);
         return chart;

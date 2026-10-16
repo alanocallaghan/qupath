@@ -41,6 +41,7 @@ import javafx.scene.chart.Chart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.slf4j.Logger;
@@ -50,6 +51,8 @@ import qupath.fx.utils.FXUtils;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.localization.QuPathResources;
+import qupath.lib.gui.prefs.PathPrefs;
+import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
@@ -118,6 +121,44 @@ public class Charts {
 					), e);
 		}
 	}
+
+	static ColorScale<PathClass> createPathClassColorScale(PathObjectHierarchy hierarchy) {
+		return new ColorScale<>() {
+			@Override
+			public Color getColor(PathClass value) {
+				return ColorToolsFX.getPathClassColor(value);
+			}
+
+			@Override
+			public PathClass getCategory(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
+				var pc = ((PathObject) data.getExtraValue()).getPathClass();
+				return Objects.requireNonNullElse(pc, PathClass.NULL_CLASS);
+			}
+
+			@Override
+			public String getCategoryName(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
+				var po = ((PathObject) data.getExtraValue());
+				if (hierarchy != null && hierarchy.getSelectionModel().isSelected(po)) {
+					return QuPathResources.getString("Charts.PathObjectScatterChart.selected");
+				}
+				return getCategory(series, data).toString();
+			}
+
+			@Override
+			public Color getColor(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
+				var po = ((PathObject) data.getExtraValue());
+				if (hierarchy != null && hierarchy.getSelectionModel().isSelected(po)) {
+					return ColorToolsFX.getCachedColor(PathPrefs.colorSelectedObjectProperty().get());
+				}
+				var pc = po.getPathClass();
+				if (pc == PathClass.NULL_CLASS)
+					return ColorToolsFX.getCachedColor(PathPrefs.colorDefaultObjectsProperty().get());
+				else
+					return ColorToolsFX.getPathClassColor(pc);
+			}
+		};
+	}
+
 
 	/**
 	 * Try to select an object if possible (e.g. because a user clicked on it).
