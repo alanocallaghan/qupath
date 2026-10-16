@@ -1,13 +1,11 @@
 package qupath.lib.gui.charts;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.DoubleProperty;
@@ -53,9 +51,9 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
     private final IntegerProperty randomSeed = new SimpleIntegerProperty(123);
 
-    private ObjectProperty<ColorScale<?>> colorScaleObjectProperty = new SimpleObjectProperty<>(ColorScale.SERIES_NAME);
+    private ObjectProperty<ColorScale> colorScaleObjectProperty = new SimpleObjectProperty<>(ColorScales.SERIES_NAME);
 
-    public void setColorScale(ColorScale<?> colorScale) {
+    public void setColorScale(ColorScale colorScale) {
         this.colorScaleObjectProperty.set(colorScale);
     }
 
@@ -287,34 +285,20 @@ public class CanvasScatterChart<X,Y> extends ScatterChart<X,Y> implements Canvas
 
     @Override
     protected void updateLegend() {
-        List<Node> legendList = new ArrayList<>();
         HBox container = new HBox(); // todo probably need to handle different orientations...
         container.setAlignment(Pos.CENTER);
         container.setSpacing(5);
-        Set<Pair<String, Color>> categories = new HashSet<>();
+        Set<Node> legendItems = new HashSet<>();
         if (getData() != null) {
             for (Series<X,Y> series : getData()) {
                 for (var point : series.getData()) {
-                    categories.add(
-                            new Pair<>(
-                                    colorScaleObjectProperty.get().getCategoryName(series, point),
-                                    colorScaleObjectProperty.get().getColor(series, point)
-                            )
+                    legendItems.add(
+                            colorScaleObjectProperty.get().getLegendItem(series, point)
                     );
                 }
             }
         }
-        for (var category : categories) {
-            HBox box = new HBox();
-            box.setAlignment(Pos.CENTER);
-            box.setSpacing(5);
-            Label label = new Label(category.getKey());
-            Node symbol = new Circle(5, category.getValue());
-            symbol.getStyleClass().setAll("chart-legend-item-symbol");
-            box.getChildren().addAll(symbol, label);
-            legendList.add(box);
-        }
-
+        List<Node> legendList = new ArrayList<>(legendItems);
         container.getChildren().setAll(legendList);
         setLegend(container);
     }

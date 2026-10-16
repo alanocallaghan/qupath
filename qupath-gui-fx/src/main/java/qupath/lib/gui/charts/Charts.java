@@ -33,21 +33,31 @@ import javafx.beans.property.DoubleProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.EventHandler;
+import javafx.geometry.Pos;
 import javafx.geometry.Side;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.Chart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
+import javafx.scene.control.Label;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
+import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.fx.dialogs.Dialogs;
 import qupath.fx.utils.FXUtils;
+import qupath.lib.color.ColorMaps;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.localization.QuPathResources;
@@ -122,28 +132,9 @@ public class Charts {
 		}
 	}
 
-	static ColorScale<PathClass> createPathClassColorScale(PathObjectHierarchy hierarchy) {
-		return new ColorScale<>() {
-			@Override
-			public Color getColor(PathClass value) {
-				return ColorToolsFX.getPathClassColor(value);
-			}
 
-			@Override
-			public PathClass getCategory(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
-				var pc = ((PathObject) data.getExtraValue()).getPathClass();
-				return Objects.requireNonNullElse(pc, PathClass.NULL_CLASS);
-			}
-
-			@Override
-			public String getCategoryName(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
-				var po = ((PathObject) data.getExtraValue());
-				if (hierarchy != null && hierarchy.getSelectionModel().isSelected(po)) {
-					return QuPathResources.getString("Charts.PathObjectScatterChart.selected");
-				}
-				return getCategory(series, data).toString();
-			}
-
+	static ColorScale createPathClassColorScale(PathObjectHierarchy hierarchy) {
+		return new ColorScales.AbstractColorScale() {
 			@Override
 			public Color getColor(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
 				var po = ((PathObject) data.getExtraValue());
@@ -155,6 +146,17 @@ public class Charts {
 					return ColorToolsFX.getCachedColor(PathPrefs.colorDefaultObjectsProperty().get());
 				else
 					return ColorToolsFX.getPathClassColor(pc);
+			}
+
+			@Override
+			public String getCategory(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
+				var po = ((PathObject) data.getExtraValue());
+				var pc = po.getPathClass();
+				if (hierarchy != null && hierarchy.getSelectionModel().isSelected(po)) {
+					return QuPathResources.getString("Charts.PathObjectScatterChart.selected");
+				}
+				pc = pc == null ? PathClass.NULL_CLASS : pc;
+				return pc.toString();
 			}
 		};
 	}

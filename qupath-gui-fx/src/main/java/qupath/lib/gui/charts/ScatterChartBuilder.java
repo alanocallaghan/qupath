@@ -37,11 +37,10 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
 
     private static final Logger logger = LoggerFactory.getLogger(ScatterChartBuilder.class);
     private static final Integer DEFAULT_MAX_DATAPOINTS = 1_000_000;
-    private static final ColorScale<?> DEFAULT_COLOR_SCALE = ColorScale.SERIES_NAME;
 
     private Integer maxDatapoints;
     private Random rnd = new Random();
-    private ColorScale<?> colorScale;
+    private ColorScale colorScale = ColorScales.SERIES_NAME;
 
     ScatterChartBuilder() {
     }
@@ -63,7 +62,7 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         return this;
     }
 
-    public ScatterChartBuilder colorScale(ColorScale<?> colorScale) {
+    public ScatterChartBuilder colorScale(ColorScale colorScale) {
         this.colorScale = colorScale;
         return this;
     }
@@ -143,6 +142,16 @@ public class ScatterChartBuilder extends Charts.XYNumberChartBuilder<ScatterChar
         }
         return addSeries(null, pathObjects, xFun, yFun);
     }
+
+    public ScatterChartBuilder measurements(Collection<? extends PathObject> pathObjects, String xMeasurement, String yMeasurement, String colorMeasurement) {
+        xLabel(xMeasurement);
+        yLabel(yMeasurement);
+        Function<PathObject, Number> xFun = (PathObject p) -> p.getMeasurementList().get(xMeasurement);
+        Function<PathObject, Number> yFun = (PathObject p) -> p.getMeasurementList().get(yMeasurement);
+        colorScale(ColorScales.createMeasurementColorScale(colorMeasurement));
+        return addSeries(null, pathObjects, xFun, yFun);
+    }
+
 
 
     /**
