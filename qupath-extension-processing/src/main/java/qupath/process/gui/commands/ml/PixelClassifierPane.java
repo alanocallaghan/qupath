@@ -78,6 +78,7 @@ import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.gui.tools.IconFactory;
 import qupath.lib.images.ImageData;
+import qupath.lib.images.cache.ImageCache;
 import qupath.lib.images.servers.ImageChannel;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.ImageServerMetadata;
@@ -112,8 +113,6 @@ import java.util.TreeMap;
 
 /**
  * Main user interface for interactively training a {@link PixelClassifier}.
- * 
- * @author Pete Bankhead
  */
 public class PixelClassifierPane {
 	
@@ -183,7 +182,7 @@ public class PixelClassifierPane {
 	}
 
 	private PixelClassifierOverlayManager createOverlayManager(QuPathGUI qupath, PixelClassifierTraining helper) {
-		var overlayManager = new PixelClassifierOverlayManager(qupath.getViewerManager(), qupath.getImageRegionStore(), helper);
+		var overlayManager = new PixelClassifierOverlayManager(qupath.getViewerManager(), ImageCache.getSharedInstance(), helper);
 		overlayManager.classifierProperty().bind(currentClassifier);
 		overlayManager.livePredictionProperty().bind(livePrediction);
 		return overlayManager;
@@ -201,10 +200,18 @@ public class PixelClassifierPane {
 	 * Show the stage containing this pane.
 	 */
 	public void showStage() {
+		getStage().show();
+	}
+
+	/**
+	 * Get the stage showing this pane.
+	 * @return
+	 */
+	public Stage getStage() {
 		if (stage == null) {
 			stage = createUI();
 		}
-		stage.show();
+		return stage;
 	}
 
 	private void initializeSubscriptions() {
