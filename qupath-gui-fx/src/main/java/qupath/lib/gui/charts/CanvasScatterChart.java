@@ -213,8 +213,6 @@ public class CanvasScatterChart<X extends Number,Y extends Number> extends Scatt
 
         // can't select parent of plot children (might be empty), but scenicView to the rescue
         Pane plotContent = (Pane) lookup(".chart-content");
-        // todo set just plot panel and legend box to white?
-//        plotContent.setStyle("-fx-background-color: white;");
 
         if (plotContent != null) {
             canvas.widthProperty().bind(plotContent.widthProperty());

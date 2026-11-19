@@ -1132,7 +1132,7 @@ public class Charts {
 		 */
 		public ScatterChartBuilder centroids(Collection<? extends PathObject> pathObjects, String colorMeasurement) {
 			centroids(pathObjects);
-//			colorScale(ColorScales.createMeasurementColorScale(colorMeasurement, ColorMaps.getDefaultColorMap()));
+			colorScale(ColorScales.createMeasurementColorScale(colorMeasurement, ColorMaps.getDefaultColorMap()));
 			return this;
 		}
 

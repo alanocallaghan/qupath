@@ -4,7 +4,6 @@
 
 .chart-legend {
     -fx-background-color: derive(-fx-base, 25%);
-    /*-fx-background-color:  transparent;*/
     -fx-border-color: derive(-fx-background,-25%);
 }
 
