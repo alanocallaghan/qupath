@@ -1,6 +1,7 @@
 package qupath.lib.gui.charts;
 
 import java.util.List;
+import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.chart.XYChart;
 import javafx.scene.paint.Color;
@@ -34,4 +35,6 @@ public interface ColorScale {
      * @return a Node
      */
     Node getLegendItem(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data);
+
+    void setSide(Side legendSide);
 }

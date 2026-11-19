@@ -6,12 +6,13 @@ import java.util.List;
 import java.util.Map;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
@@ -63,6 +64,7 @@ public class ColorScales {
 			public Color getColor(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
 				return colorMap.computeIfAbsent(series.getName(), _ -> getNextColor());
 			}
+
 		};
 	}
 
@@ -73,44 +75,78 @@ public class ColorScales {
 
 		protected final NumberAxis colorAxis;
 		protected final ColorMaps.ColorMap colorMap;
-		protected final Node legend;
+		protected Node legend;
+		private Side side;
 		private Rectangle scaleRect;
 
-		ContinuousColorScale(String name, ColorMaps.ColorMap colorMap) {
+		// todo fixed min/max options, or simply expose axis
+
+		ContinuousColorScale(String name, ColorMaps.ColorMap colorMap, Side side) {
 			this.colorAxis = new NumberAxis();
 			colorAxis.setLabel(name);
 			colorAxis.setForceZeroInRange(false);
 			this.colorMap = colorMap;
+			this.side = side;
 			this.legend = createLegendItem();
 		}
 
         @Override
         public Node getLegendItem(XYChart.Series<?,?> series, XYChart.Data<?,?> data) {
-            return this.legend;
+			return this.legend;
         }
 
-		private Node createLegendItem() {
-			HBox legendContainer = new HBox(); // todo probably need to handle different orientations...
-			legendContainer.setAlignment(Pos.TOP_CENTER);
-			legendContainer.setSpacing(5);
+		public NumberAxis getNumberAxis() {
+			return colorAxis;
+		}
 
+		private Node createLegendItem() {
 			scaleRect = new Rectangle();
-			scaleRect.setHeight(20);
 			remakeFill();
 
-			var box = new VBox(scaleRect, colorAxis);
-			scaleRect.widthProperty().bind(colorAxis.widthProperty());
-			HBox.setHgrow(box, Priority.ALWAYS);
-			HBox.setHgrow(scaleRect, Priority.ALWAYS);
-			box.setPadding(new Insets(10));
-			box.setStyle("-fx-border-color: lightgray;");
-            return box;
+			Pane container;
+			if (side.isVertical()) {
+				var box = new HBox();
+				if (side == Side.LEFT) {
+					box.getChildren().addAll(colorAxis, scaleRect);
+				} else {
+					box.getChildren().addAll(scaleRect, colorAxis);
+				}
+				scaleRect.setWidth(20); // todo non-fixed
+				colorAxis.setSide(side);
+				scaleRect.heightProperty().bind(colorAxis.heightProperty());
+				container = box;
+			} else {
+				var box = new VBox();
+				if (side == Side.TOP) {
+					box.getChildren().addAll(colorAxis, scaleRect);
+				} else {
+					box.getChildren().addAll(scaleRect, colorAxis);
+				}
+				scaleRect.setHeight(20); // todo as above
+				colorAxis.setSide(side);
+				scaleRect.widthProperty().bind(colorAxis.widthProperty());
+				container = box;
+			}
+			container.setPadding(new Insets(10));
+			container.getStyleClass().add("chart-legend");
+            return container;
+		}
+
+		@Override
+		public void setSide(Side side) {
+			this.side = side;
+			this.legend = createLegendItem();
 		}
 
 		protected void remakeFill() {
 			List<Stop> stops = createStops(colorMap, colorAxis.getLowerBound(), colorAxis.getUpperBound(), 100);
-			var grad = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE, stops);
-			scaleRect.setFill(grad);
+			if (side.isVertical()) {
+				var grad = new LinearGradient(0, 1, 0, 0, true, CycleMethod.NO_CYCLE, stops);
+				scaleRect.setFill(grad);
+			} else {
+				var grad = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE, stops);
+				scaleRect.setFill(grad);
+			}
 		}
 
 		static List<Stop> createStops(ColorMaps.ColorMap colorMap, double min, double max, int nStep) {
@@ -128,14 +164,18 @@ public class ColorScales {
 	}
 
 
+	public static ColorScale createMeasurementColorScale(String measurement, ColorMaps.ColorMap colorMap) {
+		return createMeasurementColorScale(measurement, colorMap, Side.BOTTOM);
+	}
+
 	/**
 	 * Color points based on a PathObject measurement field
 	 * @param measurement the measurement
 	 * @param colorMap the color map to be used
 	 * @return a color scale
 	 */
-    public static ColorScale createMeasurementColorScale(String measurement, ColorMaps.ColorMap colorMap) {
-		return new ContinuousColorScale(measurement, colorMap) {
+    public static ColorScale createMeasurementColorScale(String measurement, ColorMaps.ColorMap colorMap, Side side) {
+		return new ContinuousColorScale(measurement, colorMap, side) {
 
 			@Override
 			public void prepare(List<? extends XYChart.Series<?, ?>> seriesList) {
@@ -160,9 +200,6 @@ public class ColorScales {
 				colorAxis.setAutoRanging(true);
 				colorAxis.invalidateRange(List.of(min, max));
 
-//				colorAxis.setAutoRanging(false);
-//				colorAxis.setLowerBound(min);
-//				colorAxis.setUpperBound(max);
 
 				colorAxis.setMinorTickVisible(false);
 
@@ -202,6 +239,12 @@ public class ColorScales {
 	public static abstract class AbstractColorScale implements ColorScale {
 
 		private final Map<String, Node> legendItems = new HashMap<>();
+		protected Side side; // todo use
+
+		@Override
+		public void setSide(Side legendSide) {
+			this.side = legendSide;
+		}
 
 		@Override
 		public void prepare(List<? extends XYChart.Series<?, ?>> seriesList) {}
