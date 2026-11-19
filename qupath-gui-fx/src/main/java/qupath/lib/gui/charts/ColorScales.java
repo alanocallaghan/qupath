@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Side;
@@ -77,15 +79,17 @@ public class ColorScales {
 
 		protected final NumberAxis colorAxis;
 		protected final ColorMaps.ColorMap colorMap;
+		protected final String name;
 		protected Node legend;
 		private Side side;
 		private Region scaleRect;
-
-		// todo fixed min/max options, or simply expose axis
+		private DoubleProperty upperBound = new SimpleDoubleProperty(Double.NEGATIVE_INFINITY);
+		private DoubleProperty lowerBound = new SimpleDoubleProperty(Double.POSITIVE_INFINITY);
 
 		ContinuousColorScale(String name, ColorMaps.ColorMap colorMap, Side side) {
 			this.colorAxis = new NumberAxis();
-			colorAxis.setLabel(name);
+			this.name = name;
+			colorAxis.setLabel(this.name);
 			colorAxis.setForceZeroInRange(false);
 			colorAxis.setMinorTickVisible(false);
 			colorAxis.setAnimated(false);
@@ -95,14 +99,36 @@ public class ColorScales {
 			this.legend = createLegendItem();
 		}
 
+		public void setLowerBound(double lowerBound) {
+			this.lowerBound.set(lowerBound);
+		}
+
+		public double getLowerBound() {
+			return this.lowerBound.getValue();
+		}
+
+		public void setUpperBound(double upperBound) {
+			this.upperBound.set(upperBound);
+		}
+
+		public double getUpperBound() {
+			return this.upperBound.get();
+		}
+
+		public void setAutoRanging(boolean autoRanging) {
+			colorAxis.setAutoRanging(autoRanging);
+		}
+
+		public boolean isAutoRanging() {
+			return colorAxis.isAutoRanging();
+		}
+
+		// todo tick setter and builder
+
         @Override
         public Node getLegendItem(XYChart.Series<?,?> series, XYChart.Data<?,?> data) {
 			return this.legend;
         }
-
-		public NumberAxis getNumberAxis() {
-			return colorAxis;
-		}
 
 		private Node createLegendItem() {
 			scaleRect = new Region();
@@ -164,7 +190,61 @@ public class ColorScales {
 			}
 			return stops;
 		}
+	}
 
+
+	public static class MeasurementColorScale extends ContinuousColorScale {
+		MeasurementColorScale(String name, ColorMaps.ColorMap colorMap, Side side) {
+			super(name, colorMap, side);
+		}
+
+		@Override
+		public void prepare(List<? extends XYChart.Series<?, ?>> seriesList) {
+			double min = Double.POSITIVE_INFINITY;
+			double max = Double.NEGATIVE_INFINITY;
+			for (var series: seriesList) {
+				for (var data : series.getData()) {
+					double val = getMeasurement(data);
+					if (!Double.isFinite(val) || Double.isNaN(val)) {
+						continue;
+					}
+					min = Math.min(min, val);
+					max = Math.max(max, val);
+				}
+			}
+			if (min == Double.POSITIVE_INFINITY && max == Double.NEGATIVE_INFINITY) {
+				return;
+			}
+			// first set the bounds directly so that we can calculate colors
+			setLowerBound(Math.min(min, getLowerBound()));
+			setUpperBound(Math.max(max, getUpperBound()));
+			colorAxis.setLowerBound(getLowerBound());
+			colorAxis.setUpperBound(getUpperBound());
+
+			// then call invalidateRange so we hopefully get the nice auto-ranging from jfx (if set)
+			colorAxis.invalidateRange(List.of());
+			remakeFill();
+		}
+
+		private double getMeasurement(XYChart.Data<?, ?> data) {
+			if (data.getExtraValue() instanceof PathObject pathObject) {
+				return pathObject.getMeasurementList().get(name);
+			} else {
+				return Double.NaN;
+			}
+		}
+
+		@Override
+		public Color getColor(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
+			double val = getMeasurement(data);
+			if (!Double.isFinite(val) || Double.isNaN(val)) {
+				// todo parameterize
+				return Color.TRANSPARENT;
+			}
+			return ColorToolsFX.getCachedColor(
+					colorMap.getColor(val, colorAxis.getLowerBound(), colorAxis.getUpperBound())
+			);
+		}
 	}
 
 
@@ -179,61 +259,7 @@ public class ColorScales {
 	 * @return a color scale
 	 */
     public static ColorScale createMeasurementColorScale(String measurement, ColorMaps.ColorMap colorMap, Side side) {
-		return new ContinuousColorScale(measurement, colorMap, side) {
-
-			@Override
-			public void prepare(List<? extends XYChart.Series<?, ?>> seriesList) {
-				double min = Double.POSITIVE_INFINITY;
-				double max = Double.NEGATIVE_INFINITY;
-				for (var series: seriesList) {
-					for (var data : series.getData()) {
-						double val = getMeasurement(data);
-						if (!Double.isFinite(val) || Double.isNaN(val)) {
-							continue;
-						}
-						min = Math.min(min, val);
-						max = Math.max(max, val);
-					}
-				}
-				if (min == Double.POSITIVE_INFINITY && max == Double.NEGATIVE_INFINITY) {
-					return;
-				}
-				// todo parameterize min/max
-
-				// todo would be nice to set nice ticks without this and setting upper/lower directly
-				colorAxis.setAutoRanging(true);
-
-				// first set the bounds directly so that we can calculate colors
-				colorAxis.setLowerBound(min);
-				colorAxis.setUpperBound(max);
-				// then call invalidateRange so we hopefully get the nice auto-ranging from jfx
-				colorAxis.invalidateRange(List.of(min, max));
-				remakeFill();
-			}
-
-			private double getMeasurement(XYChart.Data<?, ?> data) {
-                if (data.getExtraValue() instanceof PathObject pathObject) {
-                    return pathObject.getMeasurementList().get(measurement);
-                } else {
-                    return Double.NaN;
-                }
-			}
-
-			@Override
-			public Color getColor(XYChart.Series<?, ?> series, XYChart.Data<?, ?> data) {
-				double val = getMeasurement(data);
-				if (!Double.isFinite(val) || Double.isNaN(val)) {
-					// todo parameterize
-					return Color.TRANSPARENT;
-				}
-				return ColorToolsFX.getCachedColor(
-						colorMap.getColor(val, colorAxis.getLowerBound(), colorAxis.getUpperBound())
-				);
-			}
-
-		};
-
-
+		return new MeasurementColorScale(measurement, colorMap, side);
 	}
 
 	/**
