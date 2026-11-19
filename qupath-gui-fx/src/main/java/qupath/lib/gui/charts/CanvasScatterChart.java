@@ -19,6 +19,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.chart.Axis;
+import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.ScatterChart;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -32,6 +33,7 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.index.quadtree.Quadtree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.gui.charts.ColorScales.ContinuousColorScale;
 
 public class CanvasScatterChart<X extends Number,Y extends Number> extends ScatterChart<X,Y> implements CanvasChart<X,Y> {
     private static final Logger logger = LoggerFactory.getLogger(CanvasScatterChart.class);
@@ -320,11 +322,8 @@ public class CanvasScatterChart<X extends Number,Y extends Number> extends Scatt
             for (Series<X,Y> series : getData()) {
                 for (var point : series.getData()) {
                     var item = colorScaleObjectProperty.get().getLegendItem(series, point);
-                    if (getLegendSide().isVertical()) {
-                        VBox.setVgrow(item, Priority.ALWAYS);
-                    } else {
-                        HBox.setHgrow(item, Priority.ALWAYS);
-                    }
+                    VBox.setVgrow(item, Priority.ALWAYS);
+                    HBox.setHgrow(item, Priority.ALWAYS);
                     legendItems.add(item);
                 }
             }
@@ -334,7 +333,6 @@ public class CanvasScatterChart<X extends Number,Y extends Number> extends Scatt
     }
 
     private final AnimationTimer timer = new AnimationTimer() {
-
         @Override
         public void handle(long now) {
             if (colorScaleDirty) {
@@ -355,7 +353,6 @@ public class CanvasScatterChart<X extends Number,Y extends Number> extends Scatt
                 }
                 treeRebuildNeeded = false;
             }
-
         }
     };
 

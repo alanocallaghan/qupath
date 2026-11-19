@@ -372,6 +372,8 @@ public class Charts {
 								.collect(Collectors.toSet())));
 
 			var chart = build();
+			stage.setWidth(1000);
+			stage.setHeight(1000);
 			stage.setScene(new Scene(chart));
 			return stage;
 		}

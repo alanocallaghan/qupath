@@ -11,15 +11,17 @@ import javafx.scene.Node;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Label;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.Stop;
 import javafx.scene.shape.Circle;
-import javafx.scene.shape.Rectangle;
 import qupath.lib.color.ColorMaps;
 import qupath.lib.gui.tools.ColorToolsFX;
 import qupath.lib.objects.PathObject;
@@ -77,7 +79,7 @@ public class ColorScales {
 		protected final ColorMaps.ColorMap colorMap;
 		protected Node legend;
 		private Side side;
-		private Rectangle scaleRect;
+		private Region scaleRect;
 
 		// todo fixed min/max options, or simply expose axis
 
@@ -85,6 +87,9 @@ public class ColorScales {
 			this.colorAxis = new NumberAxis();
 			colorAxis.setLabel(name);
 			colorAxis.setForceZeroInRange(false);
+			colorAxis.setMinorTickVisible(false);
+			colorAxis.setAnimated(false);
+
 			this.colorMap = colorMap;
 			this.side = side;
 			this.legend = createLegendItem();
@@ -100,7 +105,7 @@ public class ColorScales {
 		}
 
 		private Node createLegendItem() {
-			scaleRect = new Rectangle();
+			scaleRect = new Region();
 			remakeFill();
 
 			Pane container;
@@ -111,10 +116,10 @@ public class ColorScales {
 				} else {
 					box.getChildren().addAll(scaleRect, colorAxis);
 				}
-				scaleRect.setWidth(20); // todo non-fixed
+				scaleRect.setPrefWidth(20); // todo non-fixed
 				colorAxis.setSide(side);
-				scaleRect.heightProperty().bind(colorAxis.heightProperty());
 				container = box;
+				container.setPadding(new Insets(20, 5, 20, 5));
 			} else {
 				var box = new VBox();
 				if (side == Side.TOP) {
@@ -122,12 +127,11 @@ public class ColorScales {
 				} else {
 					box.getChildren().addAll(scaleRect, colorAxis);
 				}
-				scaleRect.setHeight(20); // todo as above
+				scaleRect.setPrefHeight(20); // todo as above
 				colorAxis.setSide(side);
-				scaleRect.widthProperty().bind(colorAxis.widthProperty());
 				container = box;
+				container.setPadding(new Insets(5, 25, 5, 25));
 			}
-			container.setPadding(new Insets(10));
 			container.getStyleClass().add("chart-legend");
             return container;
 		}
@@ -140,13 +144,13 @@ public class ColorScales {
 
 		protected void remakeFill() {
 			List<Stop> stops = createStops(colorMap, colorAxis.getLowerBound(), colorAxis.getUpperBound(), 100);
+			LinearGradient grad;
 			if (side.isVertical()) {
-				var grad = new LinearGradient(0, 1, 0, 0, true, CycleMethod.NO_CYCLE, stops);
-				scaleRect.setFill(grad);
+				grad = new LinearGradient(0, 1, 0, 0, true, CycleMethod.NO_CYCLE, stops);
 			} else {
-				var grad = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE, stops);
-				scaleRect.setFill(grad);
+				grad = new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE, stops);
 			}
+			scaleRect.setBackground(new Background(new BackgroundFill(grad, null, null)));
 		}
 
 		static List<Stop> createStops(ColorMaps.ColorMap colorMap, double min, double max, int nStep) {
@@ -191,19 +195,19 @@ public class ColorScales {
 						max = Math.max(max, val);
 					}
 				}
-				if (min == Double.POSITIVE_INFINITY && max == -Double.NEGATIVE_INFINITY) {
+				if (min == Double.POSITIVE_INFINITY && max == Double.NEGATIVE_INFINITY) {
 					return;
 				}
 				// todo parameterize min/max
 
 				// todo would be nice to set nice ticks without this and setting upper/lower directly
 				colorAxis.setAutoRanging(true);
+
+				// first set the bounds directly so that we can calculate colors
+				colorAxis.setLowerBound(min);
+				colorAxis.setUpperBound(max);
+				// then call invalidateRange so we hopefully get the nice auto-ranging from jfx
 				colorAxis.invalidateRange(List.of(min, max));
-
-
-				colorAxis.setMinorTickVisible(false);
-
-				colorAxis.layout();
 				remakeFill();
 			}
 
